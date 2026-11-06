@@ -1,4 +1,4 @@
-import { type Expr, INF, MEIO, Q, S, UM, ZERO, avalia, deNumero, div, ehZero, expande, fn, igual, livres, pot, prod, quad, soma, sub, subst } from '../math/alg'
+import { type Expr, INF, MEIO, MENOS1, Q, S, UM, ZERO, avalia, deNumero, div, ehZero, expande, fn, igual, livres, pot, prod, quad, soma, sub, subst } from '../math/alg'
 import { cruz, deriva, det, divergente, gradiente, hessiana, norma, pontoV, rotacional } from '../math/diff'
 import { primitiva } from '../math/integra'
 import { type Limite, integraNumerico, reconhece } from '../math/quad'
@@ -23,6 +23,8 @@ export type Resultado = {
   aproximado?: string
   /** Duas contas que deviam coincidir: Green, Stokes, Gauss. */
   comparacao?: { a: string; b: string; valorA: number; valorB: number }
+  /** O valor exato como expressão, quando há: é o que deixa somar parcelas sem arredondar. */
+  expr?: Expr
 }
 
 export type Curva = { r: Expr[]; t: Limite; nome: string }
@@ -187,6 +189,7 @@ export function integraRegiao(f: Expr, lim: Limite[], base: { rotulo: string; fo
       return {
         ...base,
         exato: tex(s.valor),
+        expr: s.valor,
         valor: v,
         erro: 0,
         selo: 'exato',
@@ -770,6 +773,32 @@ export function resultadoFatia(reg: Regiao, c: Expr, nums: Nums): Resultado {
     selo: 'simbolico',
     passos: [{ titulo: 'Como ler', nota: `Fixado ${u.v === 'theta' ? 'θ' : u.v === 'rho' ? 'ρ' : u.v === 'phi' ? 'φ' : u.v}, os limites de dentro são os da fatia. Mova o controle: se eles mudam de fórmula no caminho, a integral precisa ser dividida.` }],
   }
+}
+
+/** Soma de parcelas c·∫…: exata se todas forem, com o passo a passo de cada uma. */
+export function combinaResultados(partes: { c: Expr; r: Resultado; formula: string }[], nums: Nums): Resultado {
+  const formula = partes.map(({ c, formula: f }, i) => {
+    const cn = fixa(c, nums)
+    const neg0 = avalia(cn) < 0
+    const mod = neg0 ? prod(MENOS1, cn) : cn
+    const coef = igual(mod, UM) ? '' : `${tex(mod)}\\,`
+    return `${i ? (neg0 ? ' - ' : ' + ') : neg0 ? '-' : ''}${coef}${f}`
+  }).join('')
+  const passos: Passo[] = partes.flatMap(({ r }, i) => [
+    { titulo: `Parcela ${i + 1}: ${r.rotulo.toLowerCase()}`, tex: r.exato ? `${r.formula} = ${r.exato}` : `${r.formula} \\approx ${texDecimal(r.valor ?? NaN)}` },
+    ...r.passos.map((p) => ({ ...p, titulo: `${i + 1}. ${p.titulo}` })),
+  ])
+  const base = { rotulo: 'Soma de integrais', formula, passos }
+  if (partes.some(({ r }) => r.selo === 'falhou' || r.valor === undefined)) {
+    return { ...base, selo: 'falhou', aviso: 'Uma das parcelas não pôde ser calculada.' }
+  }
+  const valor = partes.reduce((s, { c, r }) => s + avalia(fixa(c, nums), nums) * r.valor!, 0)
+  if (partes.every(({ r }) => r.selo === 'exato' && r.expr)) {
+    const e = soma(...partes.map(({ c, r }) => prod(fixa(c, nums), r.expr!)))
+    return { ...base, exato: tex(e), expr: e, valor: avalia(e), erro: 0, selo: 'exato' }
+  }
+  const erro = partes.reduce((s, { c, r }) => s + Math.abs(avalia(fixa(c, nums), nums)) * (r.erro ?? 0), 0)
+  return { ...base, valor, erro, selo: 'numerico' }
 }
 
 export function resultadoGradiente(rotulo: string, formula: string, v: Expr[] | Expr): Resultado {

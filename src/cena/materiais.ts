@@ -116,6 +116,8 @@ export class GeoDinamica {
   geo = new BufferGeometry()
   capV = 0
   capI = 0
+  idx: Uint32Array | null = null
+  uv: Float32Array | null = null
 
   atualiza(m: MalhaSup, raio: number) {
     const nV = m.pos.length / 3
@@ -129,6 +131,8 @@ export class GeoDinamica {
       this.geo.setAttribute('normal', new BufferAttribute(new Float32Array(this.capV * 3), 3))
       this.geo.setAttribute('aUv', new BufferAttribute(new Float32Array(this.capV * 2), 2))
       this.geo.setIndex(new BufferAttribute(new Uint32Array(this.capI), 1))
+      this.idx = null
+      this.uv = null
     }
     const a = this.geo.attributes
     const envia = (attr: BufferAttribute, v: ArrayLike<number>, tam: number) => {
@@ -139,11 +143,24 @@ export class GeoDinamica {
     }
     envia(a.position as BufferAttribute, m.pos, m.pos.length)
     envia(a.normal as BufferAttribute, m.nor, m.nor.length)
-    envia(a.aUv as BufferAttribute, m.uv, m.uv.length)
-    envia(this.geo.index as BufferAttribute, m.idx, nI)
+    // escrever num buffer que a placa ainda lê faz o driver esperar: o que não mudou fica
+    if (!iguais(this.uv, m.uv)) {
+      envia(a.aUv as BufferAttribute, m.uv, m.uv.length)
+      this.uv = m.uv.slice()
+    }
+    if (!iguais(this.idx, m.idx)) {
+      envia(this.geo.index as BufferAttribute, m.idx, nI)
+      this.idx = m.idx.slice()
+    }
     this.geo.setDrawRange(0, nI)
     this.geo.boundingSphere = new Sphere(new Vector3(), raio)
   }
+}
+
+function iguais(a: ArrayLike<number> | null, b: ArrayLike<number>) {
+  if (!a || a.length !== b.length) return false
+  for (let i = 0; i < b.length; i++) if (a[i] !== b[i]) return false
+  return true
 }
 
 let setaUnit: BufferGeometry | null = null

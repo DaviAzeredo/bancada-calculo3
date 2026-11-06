@@ -74,6 +74,6 @@ responsive_viewports: [375, 1360]
 | Responsivo | 3,5 | Sem estouro em 375 px; app encolhe com o teclado virtual |
 | Acessibilidade | 3 | Rótulos, foco visível, movimento reduzido; sem auditoria com leitor de tela |
 | Interação | 3,5 | Edição viva, malha grossa ao arrastar e fina ao soltar |
-| Performance | 3,5 | 191 kB gz na primeira tela; 0 buffer por quadro; sem medição em GPU real |
+| Performance | 4 | 193 kB gz na primeira tela; 0 buffer por quadro; Intel UHD com quadro sincronizado: 82 a 197 quadros/s na galeria, 30 a 56 no estresse; densidade adaptativa |
 
-Média 3,5. Nenhuma dimensão abaixo de 3.
+Média 3,55. Nenhuma dimensão abaixo de 3.

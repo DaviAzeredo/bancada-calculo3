@@ -82,6 +82,7 @@ const GUIA: { tema: string; itens: [string, string, string][] }[] = [
       ['F(x,y,z) = (y, -x, z)', 'F(x,y,z)=\\left(y,-x,z\\right)', 'Campo vetorial'],
       ['F = y\\,\\mathbf{i} - x\\,\\mathbf{j}', 'F=y\\mathbf{i}-x\\mathbf{j}', 'Notação i, j, k'],
       ['P = (1, 2, 3)', 'P=\\left(1,2,3\\right)', 'Maiúscula é ponto, minúscula é vetor'],
+      ['B(t) = (1-t)P + tQ', 'B(t)=\\left(1-t\\right)\\left(1,0\\right)+t\\left(0,1\\right),\\ 0\\le t\\le1', 'Segmento de P a Q, com t de 0 a 1'],
     ],
   },
   {
@@ -100,6 +101,7 @@ const GUIA: { tema: string; itens: [string, string, string][] }[] = [
       ['\\iint_R f\\,dA', '\\iint_{R}f\\,dA', 'Sobre região com nome'],
       ['\\iiint_E f\\,dV', '\\iiint_{E}f\\,dV', 'Com jacobiano automático'],
       ['\\oint_C \\mathbf{F}\\cdot d\\mathbf{r}', '\\oint_{C}F\\cdot dr', 'Integral de linha'],
+      ['\\int_A \\mathbf{F}\\cdot d\\mathbf{r} + \\int_B \\mathbf{F}\\cdot d\\mathbf{r}', '\\int_{A}F\\cdot dr+\\int_{B}F\\cdot dr', 'Contorno por pedaços: some as parcelas'],
       ['\\iint_S \\mathbf{F}\\cdot d\\mathbf{S}', '\\iint_{S}F\\cdot dS', 'Fluxo por uma superfície'],
     ],
   },

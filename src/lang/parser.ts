@@ -399,12 +399,19 @@ class Parser {
     if (sub && ds.length === 1 && /^[xyz]$/.test(ds[0]) && t.n === 1) {
       pq.push({ var: ds[0], f: corpo })
       while ((this.ehOp('+') || this.ehOp('-')) && !this.fimDaForma()) {
+        // só é parcela da forma se terminar em dx, dy ou dz; senão o sinal é de uma soma maior
+        const volta = this.i
         const menos = this.ehOp('-')
         this.i++
-        const f = this.corpoIntegral()
-        const d = this.diferenciais(1)
-        if (d.length !== 1) throw new ErroSintaxe('Cada parcela de P dx + Q dy precisa do seu diferencial')
-        pq.push({ var: d[0], f: menos ? { t: 'neg', a: f } : f })
+        try {
+          const f = this.corpoIntegral()
+          const d = this.diferenciais(1)
+          if (d.length !== 1 || !/^[xyz]$/.test(d[0])) throw new ErroSintaxe('')
+          pq.push({ var: d[0], f: menos ? { t: 'neg', a: f } : f })
+        } catch {
+          this.i = volta
+          break
+        }
       }
     }
     this.noInt--

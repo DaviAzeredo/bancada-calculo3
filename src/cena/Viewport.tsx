@@ -1,12 +1,12 @@
 import { CameraControls } from '@react-three/drei'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { Canvas, addAfterEffect, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Mesh, NeutralToneMapping, PMREMGenerator, Plane, Raycaster, Scene, Vector2, Vector3 } from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { Vista } from '../lang/resolve'
 import { useBancada } from '../store'
 import { Eixos } from './Eixos'
-import { type Pedido, useHud } from './hud'
+import { MEDIR, type Pedido, SINCRONO, useHud } from './hud'
 import { TEMAS } from './materiais'
 import { Pecas } from './Pecas'
 
@@ -127,6 +127,84 @@ function Cursor({ vista }: { vista: Vista }) {
   return null
 }
 
+/**
+ * Densidade de pixels adaptativa. Numa sequência de quadros (girar, animar, partículas), se a
+ * média passa de 26 ms a densidade cai 30%, até 1. Parada por 600 ms, a cena volta à
+ * densidade inteira num único quadro nítido. Na placa integrada, 16 superfícies em densidade
+ * 2 davam 20 quadros/s; em 1, centenas.
+ */
+function DensidadeAdaptativa() {
+  const setDpr = useThree((s) => s.setDpr)
+  const invalida = useThree((s) => s.invalidate)
+  const st = useRef({ ultimo: 0, media: 0, n: 0, dpr: 0 })
+  const maximo = Math.min(window.devicePixelRatio || 1, 2)
+  if (!st.current.dpr) st.current.dpr = maximo
+  useFrame(() => {
+    const s = st.current
+    const t = performance.now()
+    const dt = t - s.ultimo
+    s.ultimo = t
+    if (dt > 250) {
+      s.n = 0
+      return
+    }
+    s.media = s.n ? s.media * 0.85 + dt * 0.15 : dt
+    s.n++
+    if (s.n > 12 && s.media > 26 && s.dpr > 1) {
+      s.dpr = Math.max(1, s.dpr * 0.7)
+      s.n = 0
+      setDpr(s.dpr)
+    }
+  })
+  useEffect(() => {
+    const id = setInterval(() => {
+      const s = st.current
+      if (s.dpr < maximo && performance.now() - s.ultimo > 600) {
+        s.dpr = maximo
+        setDpr(maximo)
+        invalida()
+      }
+    }, 300)
+    return () => clearInterval(id)
+  }, [setDpr, invalida, maximo])
+  return null
+}
+
+/** Quadros por segundo com a cena desenhando sem parar, mais a placa que o navegador usou. */
+function Medidor() {
+  const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
+  const quadros = useRef(0)
+  // só com ?fps: alça para diagnóstico pelo console
+  useEffect(() => {
+    Object.assign(window, { __cena: { scene, gl } })
+  }, [scene, gl])
+  useEffect(() => {
+    if (!SINCRONO) return
+    const ctx = gl.getContext()
+    const px = new Uint8Array(4)
+    return addAfterEffect(() => ctx.readPixels(0, 0, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, px))
+  }, [gl])
+  useFrame(() => {
+    quadros.current++
+  })
+  useEffect(() => {
+    const ctx = gl.getContext()
+    const ext = ctx.getExtension('WEBGL_debug_renderer_info')
+    const gpu = String(ext ? ctx.getParameter(ext.UNMASKED_RENDERER_WEBGL) : ctx.getParameter(ctx.RENDERER))
+    let t0 = performance.now()
+    const id = setInterval(() => {
+      const t = performance.now()
+      const el = gl.domElement
+      useHud.setState({ medida: { fps: (quadros.current * 1000) / (t - t0), gpu, triangulos: gl.info.render.triangles, dpr: gl.getPixelRatio(), largura: el.width, altura: el.height } })
+      quadros.current = 0
+      t0 = t
+    }, 1000)
+    return () => clearInterval(id)
+  }, [gl])
+  return null
+}
+
 function Captura() {
   const gl = useThree((s) => s.gl)
   const scene = useThree((s) => s.scene)
@@ -189,7 +267,7 @@ export function Viewport() {
   }
   return (
     <Canvas
-      frameloop="demand"
+      frameloop={MEDIR ? 'always' : 'demand'}
       dpr={[1, 2]}
       camera={{ fov: 30, near: 0.02, far: 4000, up: [0, 0, 1], position: [7, -10, 6] }}
       gl={{ antialias: true }}
@@ -207,6 +285,8 @@ export function Viewport() {
       <Pecas planos={planos} vista={vista} tema={tema} />
       <Cursor vista={vista} />
       <Captura />
+      <DensidadeAdaptativa />
+      {MEDIR && <Medidor />}
     </Canvas>
   )
 }

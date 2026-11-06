@@ -210,7 +210,8 @@ function identificador(id: string, esc: Escopo): Valor {
 
 /** Integral dentro de uma fórmula maior: só a forma simbólica cabe aqui. */
 function integralComoValor(no: Extract<No, { t: 'int' }>, esc: Escopo): Valor {
-  if (no.n !== 1 || no.sub || no.ds.length !== 1) throw new ErroCalculo('Integral múltipla vai sozinha numa linha')
+  if (no.sub) throw new ErroCalculo('Integral sobre curva, superfície ou região só entra em somas e múltiplos, como ∫_A F·dr + ∫_B F·dr')
+  if (no.n !== 1 || no.ds.length !== 1) throw new ErroCalculo('Integral dupla ou tripla dentro de outra conta: escreva-a sozinha ou como parcela de uma soma')
   const f = escalar(paraValor(no.corpo, esc), 'Integrando')
   const v = no.ds[0]
   const p = primitiva(f, v)

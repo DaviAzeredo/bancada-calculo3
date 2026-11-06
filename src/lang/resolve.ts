@@ -511,6 +511,60 @@ class Analisador {
     throw new ErroCalculo(`Comando desconhecido: ${f}`)
   }
 
+  /**
+   * ∫_A F·dr + ∫_B F·dr, 2∫… − ∫…: contornos por pedaços, como a borda de um triângulo.
+   * Cada parcela é uma integral inteira, e os coeficientes não podem conter integral.
+   */
+  somaDeIntegrais(no: No, a: Analise) {
+    const termos: { c: Expr; int: Extract<No, { t: 'int' }> }[] = []
+    let constante: Expr = ZERO
+    const anda = (n: No, c: Expr) => {
+      if (n.t === 'int') termos.push({ c, int: n })
+      else if (n.t === 'neg') anda(n.a, neg(c))
+      else if (n.t === 'bin' && (n.op === '+' || n.op === '-')) {
+        anda(n.a, c)
+        anda(n.b, n.op === '-' ? neg(c) : c)
+      } else if (n.t === 'bin' && (n.op === '*' || n.op === '·') && temIntegral(n.a) !== temIntegral(n.b)) {
+        const [k, resto] = temIntegral(n.a) ? [n.b, n.a] : [n.a, n.b]
+        anda(resto, prod(c, this.coeficiente(k)))
+      } else if (n.t === 'bin' && n.op === '/' && !temIntegral(n.b)) anda(n.a, prod(c, pot(this.coeficiente(n.b), Q(-1))))
+      else if (!temIntegral(n)) constante = soma(constante, prod(c, this.coeficiente(n)))
+      else throw new ErroCalculo('Integral sobre curva, superfície ou região só entra em somas e múltiplos, como ∫_A F·dr + ∫_B F·dr')
+    }
+    anda(no, UM)
+    const partes = termos.map(({ c, int }) => {
+      const sub0: Analise = { id: a.id, tipo: 'vazio', rotulo: '', faltando: [], desenhos: [] }
+      this.integral(int, sub0)
+      if (!sub0.calcula) throw new ErroCalculo('Uma parcela não é uma integral que eu saiba calcular')
+      return { c, sub: sub0 }
+    })
+    a.tipo = 'calculo'
+    a.rotulo = 'Soma de integrais'
+    a.desenhos = partes.flatMap((p) => p.sub.desenhos)
+    a.faltando = [...new Set([...partes.flatMap((p) => p.sub.faltando), ...[...livres(constante)].filter((v) => !this.esc.numeros.has(v))])]
+    a.calcula = (n) => {
+      const rs = partes.map(({ c, sub: s }) => {
+        const r = s.calcula!(n)
+        return { c, r, formula: r.formula }
+      })
+      const total = C.combinaResultados(rs, n)
+      if (ehZero(constante)) return total
+      const k = C.fixa(constante, n)
+      const valor = (total.valor ?? NaN) + avalia(k, n)
+      const e = total.expr ? soma(total.expr, k) : undefined
+      return { ...total, formula: `${total.formula} + ${tex(k)}`, exato: e ? tex(e) : total.exato, expr: e, valor }
+    }
+  }
+
+  /** Coeficiente de uma parcela: número ou controle deslizante, nunca variável de integração. */
+  coeficiente(n: No): Expr {
+    const v = paraValor(n, this.esc)
+    if (ehVetor(v)) throw new ErroCalculo('O coeficiente de uma integral precisa ser um número')
+    const soltas = [...livres(v)].filter((s) => !this.esc.numeros.has(s))
+    if (soltas.length) throw new ErroCalculo(`O coeficiente não pode depender de ${soltas.join(', ')}`)
+    return v
+  }
+
   integral(no: Extract<No, { t: 'int' }>, a: Analise) {
     const esc = this.esc
     a.tipo = 'calculo'
@@ -867,6 +921,7 @@ class Analisador {
     if (prim.ops.length === 0) {
       const raiz0 = prim.partes[0]
       if (raiz0.t === 'int') return this.integral(raiz0, a)
+      if (temIntegral(raiz0)) return this.somaDeIntegrais(raiz0, a)
       if (raiz0.t === 'call' && !esc.funcoes.has(raiz0.f) && !/^.+_[a-z]+$/.test(raiz0.f)) return this.comando(raiz0, a)
       const v = paraValor(raiz0, esc)
       const exprs = ehVetor(v) ? v : [v]
@@ -907,6 +962,16 @@ class Analisador {
 }
 
 const texNumVet = (v: Expr[], n: Nums) => `\\left(${v.map((c) => C.texDecimal(Number(avalia(C.fixa(c, n)).toFixed(4)))).join(',\\ ')}\\right)`
+
+function temIntegral(n: No): boolean {
+  switch (n.t) {
+    case 'int': return true
+    case 'neg': case 'abs': return temIntegral(n.a)
+    case 'bin': return temIntegral(n.a) || temIntegral(n.b)
+    case 'fn': case 'call': case 'tup': return n.a.some(temIntegral)
+    default: return false
+  }
+}
 
 const VISTA_PADRAO: Vista = { x: [-5, 5], y: [-5, 5], z: [-5, 5] }
 

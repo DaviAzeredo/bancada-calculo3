@@ -20,7 +20,7 @@ conferida por uma quadratura independente. Site estático, sem servidor e sem cu
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # 401 testes: álgebra, primitivas, parser, problemas clássicos, malhas, exemplos, entrada hostil
+npm test           # 411 testes: álgebra, primitivas, parser, problemas clássicos, malhas, exemplos, entrada hostil
 npm run build      # site estático em dist/, com orçamento do JS da primeira tela
 ```
 
@@ -45,6 +45,7 @@ Cada linha é classificada sozinha. Não há modo de digitação nem caixa de di
 | `a = 2` | controle deslizante, com animação |
 
 Integrais: `∫_0^1 ∫_0^x x y dy dx`, `∬_R f dA`, `∭_E f dV`, `∮_C F·dr`, `∮_C P dx + Q dy`,
+somas e múltiplos de integrais (`∫_A F·dr + ∫_B F·dr + ∫_D F·dr`, para contornos por pedaços),
 `∫_C f ds`, `∬_S F·dS`, `∬_S f dS`, com limites infinitos.
 
 Comandos: `grad`, `div`, `rot`, `lap`, `tangente`, `direcional`, `criticos`, `lagrange`,
@@ -73,6 +74,15 @@ Sem convergência numérica, nada leva selo de exato: é assim que `∫₋₁¹ 
 - `src/ui/`: painel, editor, cartões de resultado, galeria e guia.
 
 Detalhes em [docs/ARQUITETURA.md](docs/ARQUITETURA.md) e [DESIGN.md](DESIGN.md).
+
+Segmento de P a Q: `B(t) = (1-t)P + tQ, 0 ≤ t ≤ 1`.
+
+## Medir a fluidez
+
+Acrescente `?fps` ao endereço (antes do `#`) para ver quadros por segundo, triângulos e a placa
+de vídeo. `?fps=sync` lê um pixel a cada quadro e mede também o trabalho da placa: é a medida
+honesta. Numa Intel UHD integrada, com `?fps=sync`: 82 a 197 quadros/s em todas as cenas da
+galeria, e 30 a 56 com dezesseis superfícies transparentes animadas ao mesmo tempo.
 
 ## Segurança
 

@@ -78,3 +78,15 @@ se isso regredir.
 `motor.ts` mantém um pedido de malha em voo e guarda só o mais recente. Arrastando ou
 animando, pede qualidade média; 180 ms depois, a alta. A assinatura de cada desenho inclui
 só os números que ele usa, então mover `a` não refaz o que não depende de `a`.
+
+Com mais de quatro superfícies visíveis, a animação pede a malha baixa. As peças que chegam do
+worker entram juntas, uma vez por quadro. `GeoDinamica` só reenvia índices e coordenadas de
+grade quando mudam: escrever num buffer que a placa ainda está lendo faz o driver esperar.
+Esse envio desnecessário, e não o shader, era o que travava a thread principal por segundos.
+
+## Densidade adaptativa
+
+Numa sequência de quadros, se a média passa de 26 ms, a densidade de pixels cai 30%, até 1.
+Parada por 600 ms, a cena volta à densidade inteira num quadro só. `?fps` mostra a medida, e
+`?fps=sync` inclui o tempo da placa. Sem sincronizar, o Edge sem janela relata centenas de
+quadros que a placa não desenhou.

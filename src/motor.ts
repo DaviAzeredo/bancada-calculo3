@@ -36,12 +36,21 @@ function enviaMalha(qualidade: PedidoMalha['qualidade']) {
   malhaW.postMessage(pedido)
 }
 
+const SUPERFICIES = new Set(['grafico', 'param', 'implicita', 'desigualdade', 'solido', 'escalar'])
+
+/** Superfícies visíveis: cada uma vira dezenas de milhares de vértices por quadro de animação. */
+function superficiesVisiveis() {
+  const { linhas, resolvido } = useBancada.getState()
+  const vis = new Set(linhas.filter((l) => l.visivel).map((l) => l.id))
+  return resolvido.analises.filter((a) => vis.has(a.id)).reduce((s, a) => s + a.desenhos.filter((d) => SUPERFICIES.has(d.d)).length, 0)
+}
+
 function aoMudar() {
   const baixo = navigator.hardwareConcurrency <= 4
   const alta: PedidoMalha['qualidade'] = baixo ? 'media' : 'alta'
   clearTimeout(refino)
   if (useBancada.getState().arrastando || Object.values(useBancada.getState().animando).some(Boolean)) {
-    enviaMalha(baixo ? 'baixa' : 'media')
+    enviaMalha(baixo || superficiesVisiveis() > 4 ? 'baixa' : 'media')
     refino = setTimeout(() => enviaMalha(alta), 180)
   } else enviaMalha(alta)
 }
@@ -60,6 +69,22 @@ function enviaCalculo() {
   }, 140)
 }
 
+/** Peças do worker entram juntas, uma vez por quadro: dezesseis superfícies, um render. */
+let chegadas: Record<string, { id: string; feitos: Feito[] }> = {}
+let descargaAgendada = false
+function descarrega() {
+  descargaAgendada = false
+  if (!Object.keys(chegadas).length) return
+  const novas = chegadas
+  chegadas = {}
+  usePecas.setState((s) => ({ pecas: { ...s.pecas, ...novas } }))
+}
+function agendaDescarga() {
+  if (descargaAgendada) return
+  descargaAgendada = true
+  requestAnimationFrame(descarrega)
+}
+
 export function ligaMotor() {
   if (malhaW) return
   malhaW = new Worker(new URL('./malha/malha.worker.ts', import.meta.url), { type: 'module' })
@@ -68,9 +93,11 @@ export function ligaMotor() {
   malhaW.onmessage = (ev: MessageEvent<RespostaMalha>) => {
     const m = ev.data
     if (m.tipo === 'peca') {
-      usePecas.setState((s) => ({ pecas: { ...s.pecas, [m.chave]: { id: m.id, feitos: m.feitos } } }))
+      chegadas[m.chave] = { id: m.id, feitos: m.feitos }
+      agendaDescarga()
       return
     }
+    descarrega()
     emVoo = false
     usePecas.setState((s) => {
       const vivas = new Set(m.vivas)

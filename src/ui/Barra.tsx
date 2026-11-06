@@ -96,6 +96,18 @@ export function Barra() {
   )
 }
 
+export function Medicao() {
+  const m = useHud((s) => s.medida)
+  if (!m) return null
+  const tri = m.triangulos >= 1e6 ? `${(m.triangulos / 1e6).toFixed(1).replace('.', ',')} mi` : `${Math.round(m.triangulos / 1000)} mil`
+  return (
+    <p data-medida={JSON.stringify(m)} className="num pointer-events-none absolute right-2 bottom-2 max-w-[calc(100%-1rem)] rounded-[var(--radius-ctl)] border border-line-soft bg-surface/90 px-2 py-1 text-right text-[12px] text-text-2">
+      <span className={m.fps >= 50 ? 'text-ok' : m.fps >= 30 ? 'text-accent' : 'text-danger'}>{Math.round(m.fps)} quadros/s</span> · {tri} triângulos · {m.largura}×{m.altura}
+      <span className="block truncate text-[11px] text-text-3">{m.gpu}</span>
+    </p>
+  )
+}
+
 export function LeituraCursor() {
   const c = useHud((s) => s.cursor)
   if (!c) return null

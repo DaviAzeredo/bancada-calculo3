@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect } from 'react'
 import { decodifica } from './compartilha'
 import { ligaMotor, usePecas } from './motor'
 import { useBancada } from './store'
-import { Barra, LeituraCursor } from './ui/Barra'
+import { Barra, LeituraCursor, Medicao } from './ui/Barra'
 import { Painel } from './ui/Painel'
 
 const Viewport = lazy(() => import('./cena/Viewport').then((m) => ({ default: m.Viewport })))
@@ -51,6 +51,7 @@ export function App() {
         <Carregando />
         <Barra />
         <LeituraCursor />
+        <Medicao />
         <Avisos />
       </main>
     </div>
