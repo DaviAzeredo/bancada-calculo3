@@ -78,7 +78,7 @@ function Ajustes({ linha, analise }: { linha: Linha; analise: Analise }) {
         <span className="flex-1" />
         <BotaoIcone rotulo="Mover para cima" onClick={() => move(linha.id, -1)}>{Icone.cima}</BotaoIcone>
         <BotaoIcone rotulo="Mover para baixo" onClick={() => move(linha.id, 1)}>{Icone.baixo}</BotaoIcone>
-        <BotaoIcone rotulo="Apagar linha" onClick={() => remove(linha.id)}>{Icone.lixo}</BotaoIcone>
+        <BotaoIcone rotulo="Apagar expressão" onClick={() => remove(linha.id)}>{Icone.lixo}</BotaoIcone>
       </div>
       {superficie && (
         <>
@@ -127,7 +127,7 @@ function Acoes({ linha, analise }: { linha: Linha; analise: Analise }) {
   if (!acoes.length && !renomeavel) return null
   return (
     <div className="border-t border-line-soft px-3 py-2.5">
-      <p className="mb-1.5 text-[11.5px] font-semibold tracking-[0.05em] text-text-3 uppercase">Fazer com {analise.nome ?? 'esta linha'}</p>
+      <p className="mb-1.5 text-[11.5px] font-semibold tracking-[0.05em] text-text-3 uppercase">Fazer com {analise.nome ?? 'esta expressão'}</p>
       <div className="flex flex-wrap gap-1.5">
         {acoes.map((a) => (
           <Pilula key={a.rotulo} title={a.dica} onClick={() => adicionaVarias(a.linhas, linha.id)}>{a.rotulo}</Pilula>
@@ -141,6 +141,7 @@ function Acoes({ linha, analise }: { linha: Linha; analise: Analise }) {
 export const LinhaExpr = memo(function LinhaExpr({ linha, analise, indice }: { linha: Linha; analise: Analise; indice: number }) {
   const atualiza = useBancada((s) => s.atualiza)
   const adiciona = useBancada((s) => s.adiciona)
+  const adicionaVarias = useBancada((s) => s.adicionaVarias)
   const remove = useBancada((s) => s.remove)
   const alterna = useBancada((s) => s.alterna)
   const seleciona = useBancada((s) => s.seleciona)
@@ -157,7 +158,7 @@ export const LinhaExpr = memo(function LinhaExpr({ linha, analise, indice }: { l
     if (v) setFoco(v.id)
   }
   const criarControles = () => {
-    for (const n of analise.faltando) adiciona(`${n}=1`, null, { min: -5, max: 5 })
+    adicionaVarias(analise.faltando.map((n) => ({ fonte: `${n}=1`, opc: { min: -5, max: 5 } })), linha.id)
   }
   return (
     <li className={`border-b border-line-soft transition-colors duration-150 ${selecionada ? 'bg-surface' : ''}`}>
@@ -196,7 +197,7 @@ export const LinhaExpr = memo(function LinhaExpr({ linha, analise, indice }: { l
             }}
           />
         </div>
-        <BotaoIcone rotulo="Ajustes da linha" ativo={abreAjustes} onClick={() => setAbreAjustes(!abreAjustes)} className="mt-0.5">{Icone.ajuste}</BotaoIcone>
+        <BotaoIcone rotulo="Ajustes da expressão" ativo={abreAjustes} onClick={() => setAbreAjustes(!abreAjustes)} className="mt-0.5">{Icone.ajuste}</BotaoIcone>
       </div>
       {analise.rotulo && !analise.erro && analise.tipo !== 'numero' && <p className="truncate px-[42px] pb-1 text-[11.5px] text-text-3">{analise.rotulo}</p>}
       {analise.erro && <p role="alert" className="px-[42px] pb-2 text-[12.5px] leading-snug text-danger">{analise.erro}</p>}

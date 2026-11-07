@@ -59,7 +59,7 @@ const NOMES: Record<string, string> = { gradiente: 'grad', divergente: 'div', ro
 
 function operador(nome: string, a: No[], esc: Escopo): Valor {
   const op = NOMES[nome] ?? nome
-  if (!['grad', 'div', 'rot', 'lap'].includes(op)) throw new ErroCalculo(`${nome}(…) vai sozinho numa linha`)
+  if (!['grad', 'div', 'rot', 'lap'].includes(op)) throw new ErroCalculo(`${nome}(…) precisa de uma expressão só para ele`)
   const { v, vars } = argFuncao(a[0], esc)
   if (op === 'grad') return gradiente(escalar(v, 'grad'), vars)
   if (op === 'lap') return laplaciano(escalar(v, 'lap'), vars)

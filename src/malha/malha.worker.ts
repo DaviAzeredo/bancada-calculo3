@@ -24,10 +24,20 @@ function transferiveis(f: Feito): ArrayBuffer[] {
   }
 }
 
+/** Desenhos que viram superfície: são eles que somam centenas de milhares de triângulos. */
+const SUPERFICIES = new Set(['grafico', 'param', 'implicita', 'desigualdade', 'solido', 'escalar'])
+/** Até tantas superfícies na resolução cheia; acima disso, o total de triângulos fica parado. */
+const SUP_CHEIAS = 4
+
 self.onmessage = (ev: MessageEvent<PedidoMalha>) => {
   const { seq, entradas, vista, qualidade } = ev.data
   const r = resolve(entradas, vista)
-  const q = QUALIDADE[qualidade]
+  // orçamento de triângulos: a grade de cada superfície encolhe com a raiz do número delas
+  const nSup = r.analises.reduce((n, a, i) => (entradas[i].visivel && !a.erro && !a.faltando.length ? n + a.desenhos.filter((d) => SUPERFICIES.has(d.d)).length : n), 0)
+  const f = Math.min(1, Math.sqrt(SUP_CHEIAS / Math.max(1, nSup)))
+  const q0 = QUALIDADE[qualidade]
+  const q = f < 1 ? { ...q0, grade: Math.max(24, Math.round(q0.grade * f)), implicita: Math.max(20, Math.round(q0.implicita * f)), desig: Math.max(20, Math.round(q0.desig * f)) } : q0
+  const nivel = `${qualidade}${f < 1 ? `@${q.grade}` : ''}`
   const vivas: string[] = []
   r.analises.forEach((a, i) => {
     const e = entradas[i]
@@ -35,7 +45,7 @@ self.onmessage = (ev: MessageEvent<PedidoMalha>) => {
     a.desenhos.forEach((d, k) => {
       const chave = `${a.id}#${k}`
       vivas.push(chave)
-      const sig = `${assinatura(d, r.numeros)}|${JSON.stringify(vista)}|${qualidade}|${JSON.stringify(e.opc)}`
+      const sig = `${assinatura(d, r.numeros)}|${JSON.stringify(vista)}|${nivel}|${JSON.stringify(e.opc)}`
       if (feitas.get(chave) === sig) return
       feitas.set(chave, sig)
       try {

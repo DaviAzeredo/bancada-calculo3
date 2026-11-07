@@ -20,13 +20,14 @@ conferida por uma quadratura independente. Site estático, sem servidor e sem cu
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # 411 testes: álgebra, primitivas, parser, problemas clássicos, malhas, exemplos, entrada hostil
+npm test           # 513 testes: álgebra, primitivas, parser, problemas clássicos, malhas, exemplos, entrada hostil
 npm run build      # site estático em dist/, com orçamento do JS da primeira tela
 ```
 
 ## O que aceita
 
-Cada linha é classificada sozinha. Não há modo de digitação nem caixa de diálogo.
+Cada expressão é classificada sozinha. Não há modo de digitação nem caixa de diálogo. O guia
+tem busca (sem acento e sem caixa) e traz junto os exemplos prontos do mesmo assunto.
 
 | Escrita | O que vira |
 | --- | --- |
@@ -77,12 +78,24 @@ Detalhes em [docs/ARQUITETURA.md](docs/ARQUITETURA.md) e [DESIGN.md](DESIGN.md).
 
 Segmento de P a Q: `B(t) = (1-t)P + tQ, 0 ≤ t ≤ 1`.
 
-## Medir a fluidez
+## Fluidez: um quadro por atualização da tela
 
-Acrescente `?fps` ao endereço (antes do `#`) para ver quadros por segundo, triângulos e a placa
-de vídeo. `?fps=sync` lê um pixel a cada quadro e mede também o trabalho da placa: é a medida
-honesta. Numa Intel UHD integrada, com `?fps=sync`: 82 a 197 quadros/s em todas as cenas da
-galeria, e 30 a 56 com dezesseis superfícies transparentes animadas ao mesmo tempo.
+A meta é 120 quadros/s sem queda: todo quadro em até 8,3 ms. A cena se ajusta ao ritmo da tela
+(60, 90, 120 Hz): em movimento, baixa ou sobe a densidade de pixels para caber num intervalo, e
+parada desenha um quadro nítido. O resto do orçamento vem de cortes medidos: sombreamento Lambert,
+antisserrilhado só em tela de densidade baixa, grade de 128, rótulos e eixos em poucas chamadas,
+programas compilados de antemão e editores criados um por vez.
+
+Medido numa Intel UHD integrada, na bateria, a 1920×1080 com densidade 1,25, câmera girando e
+tempo da placa por consulta de tempo: 37 das 38 cenas da galeria com todo quadro abaixo de 8,3 ms
+na resolução cheia. A exceção é a Curva de Viviani, com uma esfera transparente que enche a tela;
+com o ajuste de densidade ligado, ela e o caso extremo de dezesseis superfícies transparentes
+também ficam abaixo de 8,3 ms. No navegador de verdade, a 60 Hz: nenhum quadro perdido girando a
+cena, e de 0 a 2 ao abrir um exemplo.
+
+Acrescente `?fps` ao endereço (antes do `#`) para ver quadros por segundo, triângulos e a placa.
+`?fps=sync` lê um pixel a cada quadro e soma o tempo da placa; serve para comparar versões, mas
+infla o tempo de quadro, porque o navegador normal sobrepõe CPU e placa.
 
 ## Segurança
 

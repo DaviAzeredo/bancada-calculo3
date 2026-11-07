@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, ConeGeometry, CylinderGeometry, DoubleSide, MeshStandardMaterial, type Plane, Sphere, Vector2, Vector3 } from 'three'
+import { BufferAttribute, BufferGeometry, Color, ConeGeometry, CylinderGeometry, DoubleSide, MeshLambertMaterial, type Plane, Sphere, Vector2, Vector3 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { MalhaSup } from '../malha/malhas'
 
@@ -45,7 +45,7 @@ vec3 rampaC(float t) {
   return mix(c3, c4, x - 3.0);
 }`
 
-export type MatSup = MeshStandardMaterial & {
+export type MatSup = MeshLambertMaterial & {
   u: {
     uLinhas: { value: number }
     uPasso: { value: Vector2 }
@@ -60,9 +60,12 @@ export type MatSup = MeshStandardMaterial & {
  * Um material por peça, sempre o mesmo objeto: trocar de material a cada quadro religaria
  * o shader. Linhas de grade e curvas de nível saem do fragment shader, com a espessura em
  * pixels: nenhuma geometria extra, e ficam iguais em qualquer zoom.
+ *
+ * Lambert, e não o material físico: com a meta de 120 quadros/s, o custo por pixel decide, e
+ * o reflexo especular quase não aparecia numa superfície fosca.
  */
 export function materialSuperficie(planos: Plane[]): MatSup {
-  const m = new MeshStandardMaterial({ roughness: 0.62, metalness: 0, side: DoubleSide, clippingPlanes: planos, envMapIntensity: 0.28 }) as MatSup
+  const m = new MeshLambertMaterial({ side: DoubleSide, clippingPlanes: planos }) as MatSup
   m.u = {
     uLinhas: { value: 0 },
     uPasso: { value: new Vector2(16, 16) },
@@ -104,7 +107,7 @@ if (uContorno > 0.0) {
 }
 diffuseColor.rgb = mix(diffuseColor.rgb, uCorLinha, traco);`)
   }
-  m.customProgramCacheKey = () => 'superficie-1'
+  m.customProgramCacheKey = () => 'superficie-2'
   return m
 }
 
@@ -167,10 +170,10 @@ let setaUnit: BufferGeometry | null = null
 /** Seta de comprimento 1 ao longo de +Z, com a base na origem. */
 export function geometriaSeta() {
   if (setaUnit) return setaUnit
-  const haste = new CylinderGeometry(0.045, 0.045, 0.72, 10, 1, true)
+  const haste = new CylinderGeometry(0.045, 0.045, 0.72, 6, 1, true)
   haste.rotateX(Math.PI / 2)
   haste.translate(0, 0, 0.36)
-  const ponta = new ConeGeometry(0.13, 0.28, 12)
+  const ponta = new ConeGeometry(0.13, 0.28, 8)
   ponta.rotateX(Math.PI / 2)
   ponta.translate(0, 0, 0.86)
   setaUnit = mergeGeometries([haste, ponta])

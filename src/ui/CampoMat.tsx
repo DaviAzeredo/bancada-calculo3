@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import type { MathfieldElement } from 'mathlive'
 import { COMANDOS } from '../lang/lexer'
+import { Formula } from './Formula'
 
 declare module 'react' {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -45,6 +47,27 @@ function carregaMathlive() {
   return carregado
 }
 
+/**
+ * Editores a criar, um por vez, nas folgas entre quadros. Cada editor custa de 3 a 8 ms aqui e
+ * várias vezes isso num celular: abrir um exemplo de sete linhas criava todos no mesmo quadro e
+ * travava a câmera que voava para o novo enquadramento. Até a vez dele, a fórmula aparece em
+ * KaTeX, igual à vista.
+ */
+const fila: (() => void)[] = []
+let rodando = false
+const folga = (f: () => void) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(() => f(), { timeout: 250 }) : setTimeout(f, 16))
+function naVez(f: () => void) {
+  fila.push(f)
+  if (rodando) return
+  rodando = true
+  const passo = () => {
+    fila.shift()?.()
+    if (fila.length) folga(passo)
+    else rodando = false
+  }
+  folga(passo)
+}
+
 /** O cursor está num subscrito? Dentro de um ramo, getValue só devolve o texto desse ramo. */
 function noSubscrito(mf: MathfieldElement) {
   if ((mf.getElementInfo(mf.position)?.depth ?? 0) < 1) return false
@@ -66,18 +89,32 @@ type Props = {
 
 export function CampoMat({ valor, rotulo, foco, aoMudar, aoEnter, aoApagarVazia, aoSubir, aoDescer, aoFocar }: Props) {
   // linhas novas nascem com o editor pronto: o campo provisório roubaria o foco pedido
-  const [pronto, setPronto] = useState(jaCarregou)
+  const [pronto, setPronto] = useState(jaCarregou && !!foco)
   const ref = useRef<MathfieldElement>(null)
+  // clicou na fórmula antes da vez dela: vira editor na hora e recebe o foco
+  const querFoco = useRef(!!foco)
   const cb = useRef({ aoMudar, aoEnter, aoApagarVazia, aoSubir, aoDescer, aoFocar })
   cb.current = { aoMudar, aoEnter, aoApagarVazia, aoSubir, aoDescer, aoFocar }
 
   useEffect(() => {
     let vivo = true
-    carregaMathlive().then(() => vivo && setPronto(true), () => undefined)
+    carregaMathlive().then(
+      () => {
+        if (!vivo) return
+        if (querFoco.current) setPronto(true)
+        else naVez(() => vivo && flushSync(() => setPronto(true)))
+      },
+      () => undefined,
+    )
     return () => {
       vivo = false
     }
   }, [])
+
+  const acorda = () => {
+    querFoco.current = true
+    if (jaCarregou) setPronto(true)
+  }
 
   useEffect(() => {
     const mf = ref.current
@@ -124,11 +161,26 @@ export function CampoMat({ valor, rotulo, foco, aoMudar, aoEnter, aoApagarVazia,
   }, [valor, pronto])
 
   useEffect(() => {
-    if (foco && pronto) ref.current?.focus()
-  }, [foco, pronto])
+    if (foco && !pronto) acorda()
+    if ((foco || querFoco.current) && pronto) {
+      querFoco.current = false
+      ref.current?.focus()
+    }
+  }, [foco, pronto]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!pronto) {
-    return <input aria-label={rotulo} value={valor} onChange={(e) => aoMudar(e.target.value)} className="num h-[34px] w-full bg-transparent text-[14px] text-text outline-none" spellCheck={false} />
+    return (
+      <div
+        role="textbox"
+        tabIndex={0}
+        aria-label={rotulo}
+        onFocus={acorda}
+        onPointerDown={acorda}
+        className="flex min-h-[34px] w-full cursor-text items-center overflow-hidden px-[2px] py-[5px] text-[16px] text-text outline-none"
+      >
+        {valor ? <Formula tex={valor} /> : <span className="text-[14px] text-text-3">escreva, por exemplo, z = x² − y²</span>}
+      </div>
+    )
   }
   return <math-field ref={ref} aria-label={rotulo} />
 }

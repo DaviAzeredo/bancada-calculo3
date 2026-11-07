@@ -79,14 +79,40 @@ se isso regredir.
 animando, pede qualidade média; 180 ms depois, a alta. A assinatura de cada desenho inclui
 só os números que ele usa, então mover `a` não refaz o que não depende de `a`.
 
-Com mais de quatro superfícies visíveis, a animação pede a malha baixa. As peças que chegam do
+Com mais de quatro superfícies visíveis, a animação pede a malha baixa, e o worker encolhe a
+grade de cada uma pela raiz de 4/n: o total de triângulos fica parado. As peças que chegam do
 worker entram juntas, uma vez por quadro. `GeoDinamica` só reenvia índices e coordenadas de
 grade quando mudam: escrever num buffer que a placa ainda está lendo faz o driver esperar.
 Esse envio desnecessário, e não o shader, era o que travava a thread principal por segundos.
 
-## Densidade adaptativa
+## Ritmo da tela (`Ritmo` em `cena/Viewport.tsx`)
 
-Numa sequência de quadros, se a média passa de 26 ms, a densidade de pixels cai 30%, até 1.
-Parada por 600 ms, a cena volta à densidade inteira num quadro só. `?fps` mostra a medida, e
-`?fps=sync` inclui o tempo da placa. Sem sincronizar, o Edge sem janela relata centenas de
-quadros que a placa não desenhou.
+Meta: um quadro por atualização da tela, 120 quadros/s numa tela de 120 Hz. O ritmo da tela sai
+dos quadros mais rápidos, que o vsync prende a ele. Em movimento, duas perdas (quadro acima de
+1,5 intervalo) em 20 quadros baixam a densidade 18%, até 0,5; um segundo e meio sem perda sobe
+10%, sem voltar ao nível que falhou nos 8 s anteriores. Quadro acima de 4 intervalos é pico de
+compilação ou envio, e só conta quando se repete. Parada por 500 ms, a cena desenha um quadro na
+densidade inteira; o celular começa em 1,5.
+
+A densidade vai como prop do Canvas, pelo `useHud`: a R3F reaplica a prop `dpr` a cada render do
+Canvas, e um `setDpr` direto era desfeito no clique seguinte da barra.
+
+## Custo por quadro
+
+Cada corte foi medido antes de entrar:
+
+- Lambert no lugar do material físico, sem mapa de ambiente: o custo por pixel decidia.
+- Antisserrilhado da placa só com densidade abaixo de 1,5 e sem tela de toque.
+- Grade de 128 (era 180), implícita de 48, setas de 6 e 8 lados, linhas de fluxo com metade dos
+  segmentos.
+- Superfície transparente numa passada só: uma cor por superfície, então a ordem quase não aparece.
+- Grade e caixa numa chamada, eixos noutra, rótulos em duas (atlas e quadrados instanciados): de
+  31 a 44 chamadas por quadro para 5 a 12. No celular, cada chamada é CPU por quadro.
+- `Aquecimento` compila um programa de cada peça na abertura, em paralelo, na camada 31.
+- `checkShaderErrors` só em desenvolvimento: a conferência esperava a placa ligar o programa.
+- Editores MathLive criados um por vez, nas folgas entre quadros; até lá, a fórmula em KaTeX.
+
+Medir: `?fps` mostra a taxa; `?fps=sync` lê um pixel por quadro e soma CPU e placa, o que infla o
+tempo; `?alvo=120` fixa o ritmo sem vsync; `?ritmo=0` desliga o controle; `?aa=0` tira o
+antisserrilhado. A medida certa da placa é a consulta de tempo (`EXT_disjoint_timer_query_webgl2`)
+em volta do render, com o quadro limitado pelo maior entre CPU e placa.

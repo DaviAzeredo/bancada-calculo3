@@ -1,4 +1,4 @@
-import { type Expr, INF, MEIO, MENOS1, Q, S, UM, ZERO, avalia, deNumero, div, ehZero, expande, fn, igual, livres, pot, prod, quad, soma, sub, subst } from '../math/alg'
+import { type Expr, INF, MEIO, MENOS1, PI, Q, S, UM, ZERO, avalia, deNumero, div, ehZero, expande, fn, igual, livres, pot, prod, quad, soma, sub, subst } from '../math/alg'
 import { cruz, deriva, det, divergente, gradiente, hessiana, norma, pontoV, rotacional } from '../math/diff'
 import { primitiva } from '../math/integra'
 import { type Limite, integraNumerico, reconhece } from '../math/quad'
@@ -341,12 +341,61 @@ export function curvatura(c: Curva, t0: Expr | null, nums: Nums): Resultado {
     { titulo: 'Derivadas', tex: `\\mathbf{r}' = ${texVetor(d1)},\\quad \\mathbf{r}'' = ${texVetor(d2)}` },
     { titulo: 'Fórmula', tex: `\\kappa(${s}) = \\frac{|\\mathbf{r}'\\times\\mathbf{r}''|}{|\\mathbf{r}'|^{3}} = ${tex(k)}` },
   ]
+  const d3 = d2.map((x) => deriva(x, v))
+  const tau = div(pontoV(C, d3), pontoV(C, C))
+  const forma = formaDaCurva(k, tau, v, c.t)
   if (t0) {
     const a = fixa(t0, nums)
     const e = subst(k, { [v]: a })
-    return { rotulo: 'Curvatura', formula: `\\kappa(${tex(a)})`, exato: tex(e), valor: avalia(e), selo: 'simbolico', passos }
+    const ke = avalia(e)
+    if (forma) passos.push(forma.passo)
+    else if (Number.isFinite(ke) && Math.abs(ke) > 1e-12) passos.push({ titulo: 'Raio de curvatura', tex: `\\rho(${tex(a)}) = \\frac{1}{\\kappa(${tex(a)})} = ${tex(div(UM, e))}`, nota: 'Raio do círculo que melhor encosta na curva nesse ponto.' })
+    return { rotulo: 'Curvatura', formula: `\\kappa(${tex(a)})`, exato: forma ? `${tex(e)},\\quad ${forma.exato}` : tex(e), valor: ke, selo: 'simbolico', passos }
   }
-  return { rotulo: 'Curvatura', formula: `\\kappa(${s}) = ${tex(k)}`, selo: 'simbolico', passos }
+  passos.push(forma ? forma.passo : { titulo: 'Raio de curvatura', tex: `\\rho(${s}) = \\frac{1}{\\kappa(${s})}`, nota: 'Raio do círculo que melhor encosta na curva em cada ponto.' })
+  return { rotulo: 'Curvatura', formula: `\\kappa(${s}) = ${tex(k)}`, exato: forma?.exato, selo: 'simbolico', passos }
+}
+
+/**
+ * κ e τ constantes dizem que a curva é uma circunferência (τ = 0) ou uma hélice circular,
+ * e dão o raio dela: a = κ/(κ² + τ²). O raio de curvatura 1/κ só coincide com ele na circunferência.
+ */
+function formaDaCurva(k: Expr, tau: Expr, v: string, t: Limite): { exato: string; passo: Passo } | null {
+  const [lo, hi] = [avalia(t.lo), avalia(t.hi)]
+  const [a, b] = Number.isFinite(lo) && Number.isFinite(hi) && hi > lo ? [lo, hi] : [0, 1]
+  const amostra = [0.07, 0.3, 0.52, 0.76, 0.95].map((f) => a + f * (b - a))
+  const constante = (e: Expr) => {
+    const vs = amostra.map((x) => avalia(e, { [v]: x }))
+    if (!vs.every(Number.isFinite)) return null
+    const m = vs.reduce((s, x) => s + x, 0) / vs.length
+    return vs.every((x) => Math.abs(x - m) <= 1e-9 * (1 + Math.abs(m))) ? m : null
+  }
+  const kn = constante(k)
+  const tn = constante(tau)
+  if (kn === null || tn === null || Math.abs(kn) < 1e-12) return null
+  // o valor exato sai de um ponto qualquer do intervalo, já que não depende dele
+  const em = (e: Expr) => ([...livres(e)].includes(v) ? subst(e, { [v]: deNumero(amostra[2]) }) : e)
+  const k0 = em(k)
+  const rho = tex(div(UM, k0))
+  if (Math.abs(tn) < 1e-12) {
+    return {
+      exato: `\\text{circunferência de raio } ${rho}`,
+      passo: { titulo: 'Circunferência', tex: `\\tau = 0,\\quad \\text{raio} = \\rho = \\frac{1}{\\kappa} = ${rho}`, nota: 'Curvatura constante e torção nula: a curva é uma circunferência, e o raio dela é o raio de curvatura.' },
+    }
+  }
+  const t0 = em(tau)
+  const tAbs = tn < 0 ? prod(MENOS1, t0) : t0
+  const s2 = soma(quad(k0), quad(t0))
+  const raio = tex(div(k0, s2))
+  const passo = tex(prod(Q(2), PI, div(tAbs, s2)))
+  return {
+    exato: `\\text{raio da hélice } ${raio},\\quad \\rho = \\tfrac{1}{\\kappa} = ${rho}`,
+    passo: {
+      titulo: 'Hélice circular',
+      tex: `\\tau = ${tex(t0)},\\quad a = \\frac{\\kappa}{\\kappa^{2}+\\tau^{2}} = ${raio},\\quad \\text{passo} = \\frac{2\\pi\\,|\\tau|}{\\kappa^{2}+\\tau^{2}} = ${passo}`,
+      nota: 'Curvatura e torção constantes: a curva é uma hélice circular de raio a. O raio de curvatura ρ = 1/κ é maior que a, porque a subida abre o círculo que encosta na curva.',
+    },
+  }
 }
 
 export function torcao(c: Curva, t0: Expr | null, nums: Nums): Resultado {
@@ -638,9 +687,14 @@ export function pontosCriticos(f: Expr, vars: string[], caixa: [number, number][
     const z = vars.length === 2 ? val : x[2]
     pontos.push({ p: [x[0], x[1], z], rotulo: tipo, tipo })
   }
-  passos.push({ titulo: `${pts.length} ponto(s) na região visível`, tex: linhas.length ? `\\begin{aligned}${linhas.map((l) => `&${l}`).join('\\\\')}\\end{aligned}` : undefined, nota: 'Busca numérica por Newton a partir de uma grade: pontos fora da caixa de visualização não aparecem.' })
-  return { rotulo: 'Pontos críticos', formula: `\\nabla ${nome} = \\mathbf{0}`, exato: pts.length ? `${pts.length}\\text{ ponto${pts.length > 1 ? 's' : ''}}` : `\\text{nenhum na caixa}`, selo: 'numerico', passos, pontos }
+  // o cartão mostra os pontos, não só quantos são; acima de MAX_PONTOS, a lista inteira fica no passo
+  const lista = (ls: string[]) => `\\begin{aligned}${ls.map((l) => `&${l}`).join('\\\\')}\\end{aligned}`
+  const curta = linhas.length > MAX_PONTOS ? [...linhas.slice(0, MAX_PONTOS), `\\text{e mais ${linhas.length - MAX_PONTOS} no passo a passo}`] : linhas
+  passos.push({ titulo: `${pts.length} ponto${pts.length === 1 ? '' : 's'} na região visível`, tex: linhas.length > MAX_PONTOS ? lista(linhas) : undefined, nota: 'Busca numérica por Newton a partir de uma grade: pontos fora da caixa de visualização não aparecem.' })
+  return { rotulo: 'Pontos críticos', formula: `\\nabla ${nome} = \\mathbf{0}`, exato: pts.length ? lista(curta) : `\\text{nenhum na caixa}`, selo: 'numerico', passos, pontos }
 }
+
+const MAX_PONTOS = 8
 
 /** Autovalores por Jacobi: sinais decidem máximo, mínimo ou sela em qualquer dimensão. */
 function classifica(H: number[][]): string {
@@ -696,11 +750,21 @@ export function lagrange(f: Expr, g: Expr, vars: string[], caixa: [number, numbe
   return {
     rotulo: 'Multiplicadores de Lagrange',
     formula: `\\text{extremos de } ${nomes[0]} \\text{ com } ${nomes[1]} = 0`,
-    exato: vistos.length ? `\\max = ${texNum(maior)},\\quad \\min = ${texNum(menor)}` : '\\text{sem solução na caixa}',
+    exato: vistos.length ? extremosComLugar(vistos, maior, menor) : '\\text{sem solução na caixa}',
     selo: 'numerico',
     passos,
     pontos,
   }
+}
+
+/** Máximo e mínimo com os pontos onde acontecem: o valor sozinho não responde onde. */
+function extremosComLugar(vistos: { x: number[]; val: number }[], maior: number, menor: number): string {
+  const onde = (val: number) => {
+    const ps = vistos.filter((p) => Math.abs(p.val - val) < 1e-9).map((p) => `\\left(${p.x.map(texNum).join(',\\ ')}\\right)`)
+    return ps.length > 3 ? `${ps.slice(0, 3).join(',\\ ')}\\ \\text{e mais ${ps.length - 3}}` : ps.join(',\\ ')
+  }
+  if (Math.abs(maior - menor) < 1e-9) return `${texNum(maior)}\\ \\text{em}\\ ${onde(maior)}`
+  return `\\begin{aligned}&\\max = ${texNum(maior)}\\ \\text{em}\\ ${onde(maior)}\\\\&\\min = ${texNum(menor)}\\ \\text{em}\\ ${onde(menor)}\\end{aligned}`
 }
 
 export function resultadoJacobiano(T: Expr[], vars: string[]): Resultado {

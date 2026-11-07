@@ -1,16 +1,17 @@
 import { CameraControls } from '@react-three/drei'
-import { Canvas, addAfterEffect, useFrame, useThree } from '@react-three/fiber'
+import { Canvas, addAfterEffect, addEffect, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Mesh, NeutralToneMapping, PMREMGenerator, Plane, Raycaster, Scene, Vector2, Vector3 } from 'three'
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { Mesh, MeshLambertMaterial, NeutralToneMapping, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import type { Vista } from '../lang/resolve'
 import { useBancada } from '../store'
 import { Eixos } from './Eixos'
-import { MEDIR, type Pedido, SINCRONO, useHud } from './hud'
+import { ALVO, MEDIR, type Pedido, SEM_AA, SEM_RITMO, SINCRONO, useHud } from './hud'
 import { TEMAS } from './materiais'
-import { Pecas } from './Pecas'
+import { Aquecimento, Pecas } from './Pecas'
 
-const movimentoReduzido = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+// a consulta é viva: ler .matches por quadro não refaz o matchMedia
+const consultaMovimento = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+const movimentoReduzido = () => !!consultaMovimento?.matches
 
 const DIRECOES: Record<Exclude<Pedido, 'ajusta'>, [number, number, number]> = {
   iso: [0.72, -1, 0.62],
@@ -68,26 +69,13 @@ function Camera({ vista }: { vista: Vista }) {
   return <CameraControls ref={ref} makeDefault smoothTime={0.28} draggingSmoothTime={0.08} />
 }
 
+/** Luz de céu e duas direcionais. Sem mapa de ambiente: ele pesava por pixel e só dava um brilho fraco. */
 function Ambiente({ luz }: { luz: number }) {
-  const gl = useThree((s) => s.gl)
-  const scene = useThree((s) => s.scene)
-  useEffect(() => {
-    const pm = new PMREMGenerator(gl)
-    const salas = new RoomEnvironment()
-    const rt = pm.fromScene(salas as unknown as Scene, 0.04)
-    scene.environment = rt.texture
-    salas.dispose?.()
-    pm.dispose()
-    return () => {
-      scene.environment = null
-      rt.dispose()
-    }
-  }, [gl, scene])
   return (
     <>
-      <hemisphereLight args={['#ffffff', '#6a7286', 0.75 * luz]} />
-      <directionalLight position={[4, -6, 9]} intensity={1.35 * luz} />
-      <directionalLight position={[-6, 5, -4]} intensity={0.4 * luz} />
+      <hemisphereLight args={['#ffffff', '#6a7286', 1.05 * luz]} />
+      <directionalLight position={[4, -6, 9]} intensity={1.45 * luz} />
+      <directionalLight position={[-6, 5, -4]} intensity={0.45 * luz} />
     </>
   )
 }
@@ -127,46 +115,108 @@ function Cursor({ vista }: { vista: Vista }) {
   return null
 }
 
+const TAXAS = [30, 48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 240]
+const TOQUE = !!window.matchMedia?.('(pointer: coarse)').matches
+const DPR_MAX = Math.min(window.devicePixelRatio || 1, 2)
+/** Telas densas e celulares dispensam o antisserrilhado da placa: o pixel já é pequeno, e ele custa caro. */
+const AA = !SEM_AA && (window.devicePixelRatio || 1) < 1.5 && !TOQUE
+
 /**
- * Densidade de pixels adaptativa. Numa sequência de quadros (girar, animar, partículas), se a
- * média passa de 26 ms a densidade cai 30%, até 1. Parada por 600 ms, a cena volta à
- * densidade inteira num único quadro nítido. Na placa integrada, 16 superfícies em densidade
- * 2 davam 20 quadros/s; em 1, centenas.
+ * Um quadro por atualização da tela, em qualquer aparelho: 60, 90 ou 120 Hz.
+ *
+ * Com a cena em movimento, conta os quadros que perderam a vez (intervalo maior que 1,5 vez o da
+ * tela). Duas perdas em 20 quadros baixam a densidade de pixels em 18%, até 0,5; um segundo e meio sem
+ * perda nenhuma sobe 10%, sem passar do último nível que falhou nos 8 s anteriores. Parada por
+ * 500 ms, a cena desenha um quadro na densidade inteira; o movimento seguinte já começa na
+ * densidade aprendida. O ritmo da tela sai dos quadros mais rápidos, que o vsync prende a ele.
  */
-function DensidadeAdaptativa() {
-  const setDpr = useThree((s) => s.setDpr)
+function Ritmo() {
+  const setDpr = (v: number) => useHud.setState({ densidade: v })
   const invalida = useThree((s) => s.invalidate)
-  const st = useRef({ ultimo: 0, media: 0, n: 0, dpr: 0 })
-  const maximo = Math.min(window.devicePixelRatio || 1, 2)
-  if (!st.current.dpr) st.current.dpr = maximo
+  // piso baixo para o caso extremo (16 superfícies transparentes): parada, a cena volta nítida
+  const piso = Math.min(DPR_MAX, 0.5)
+  const st = useRef({
+    ultimo: 0,
+    dpr: DPR_MAX,
+    // celular começa mais baixo: errar para cima custa quadros perdidos logo no primeiro toque
+    movimento: TOQUE ? Math.min(DPR_MAX, 1.5) : DPR_MAX,
+    intervalo: 1000 / (ALVO || 60),
+    deltas: [] as number[],
+    n: 0,
+    perdas: 0,
+    grandes: 0,
+    estavel: 0,
+    teto: DPR_MAX,
+    falhouEm: -1e9,
+  })
+  // só com ?fps: estado do controle para diagnóstico
+  if (MEDIR) Object.assign(window, { __ritmo: st.current })
+  const aplica = (v: number) => {
+    const s = st.current
+    if (Math.abs(v - s.dpr) < 0.01) return
+    s.dpr = v
+    setDpr(v)
+  }
   useFrame(() => {
     const s = st.current
     const t = performance.now()
     const dt = t - s.ultimo
     s.ultimo = t
     if (dt > 250) {
+      // começo de movimento: sai da densidade de repouso para a que a tela aguenta
       s.n = 0
+      s.perdas = 0
+      s.grandes = 0
+      aplica(s.movimento)
       return
     }
-    s.media = s.n ? s.media * 0.85 + dt * 0.15 : dt
-    s.n++
-    if (s.n > 12 && s.media > 26 && s.dpr > 1) {
-      s.dpr = Math.max(1, s.dpr * 0.7)
-      s.n = 0
-      setDpr(s.dpr)
+    if (!ALVO) {
+      s.deltas.push(dt)
+      if (s.deltas.length >= 60) {
+        const p = [...s.deltas].sort((a, b) => a - b)[6]
+        const hz = TAXAS.reduce((m, r) => (Math.abs(1000 / r - p) < Math.abs(1000 / m - p) ? r : m))
+        s.intervalo = 1000 / hz
+        s.deltas.length = 0
+      }
     }
+    s.n++
+    // acima de 4 intervalos é pico isolado: compilação, envio de malha ou coleta de lixo, que a
+    // resolução não resolve. Só conta como perda quando se repete (4 em 20 quadros).
+    if (dt > s.intervalo * 4) s.grandes++
+    else if (dt > s.intervalo * 1.5) s.perdas++
+    if (s.n < 20) return
+    if (s.grandes >= 4) s.perdas += s.grandes
+    if (t - s.falhouEm > 8000) s.teto = DPR_MAX
+    if (s.perdas >= 2 && s.movimento > piso) {
+      s.teto = s.movimento
+      s.falhouEm = t
+      s.movimento = Math.max(piso, s.movimento * 0.82)
+      s.estavel = 0
+      aplica(s.movimento)
+    } else if (s.perdas === 0) {
+      s.estavel += s.n
+      const alvo = Math.min(DPR_MAX, s.movimento * 1.1, s.teto * 0.96)
+      if (s.estavel >= Math.max(90, 1500 / s.intervalo) && alvo > s.movimento + 0.01) {
+        s.movimento = alvo
+        s.estavel = 0
+        aplica(s.movimento)
+      }
+    } else s.estavel = 0
+    s.n = 0
+    s.perdas = 0
+    s.grandes = 0
   })
   useEffect(() => {
     const id = setInterval(() => {
       const s = st.current
-      if (s.dpr < maximo && performance.now() - s.ultimo > 600) {
-        s.dpr = maximo
-        setDpr(maximo)
+      if (s.dpr < DPR_MAX && performance.now() - s.ultimo > 500) {
+        s.dpr = DPR_MAX
+        setDpr(DPR_MAX)
         invalida()
       }
-    }, 300)
+    }, 250)
     return () => clearInterval(id)
-  }, [setDpr, invalida, maximo])
+  }, [invalida]) // eslint-disable-line react-hooks/exhaustive-deps
   return null
 }
 
@@ -177,7 +227,7 @@ function Medidor() {
   const quadros = useRef(0)
   // só com ?fps: alça para diagnóstico pelo console
   useEffect(() => {
-    Object.assign(window, { __cena: { scene, gl } })
+    Object.assign(window, { __cena: { scene, gl, MeshLambertMaterial, addEffect, addAfterEffect } })
   }, [scene, gl])
   useEffect(() => {
     if (!SINCRONO) return
@@ -253,6 +303,7 @@ export function Viewport() {
   const temaNome = useBancada((s) => s.tema)
   const vista = useBancada((s) => s.vista)
   const cena = useBancada((s) => s.cena)
+  const densidade = useHud((s) => s.densidade) ?? DPR_MAX
   const tema = TEMAS[temaNome]
   const planos = useMemo(() => planosDa(vista), [vista])
   const webgl = useMemo(temWebGL, [])
@@ -268,10 +319,12 @@ export function Viewport() {
   return (
     <Canvas
       frameloop={MEDIR ? 'always' : 'demand'}
-      dpr={[1, 2]}
+      dpr={densidade}
       camera={{ fov: 30, near: 0.02, far: 4000, up: [0, 0, 1], position: [7, -10, 6] }}
-      gl={{ antialias: true }}
+      gl={{ antialias: AA, powerPreference: 'high-performance' }}
       onCreated={({ gl }) => {
+        // a conferência de erro de shader espera a placa terminar de ligar o programa: só em desenvolvimento
+        gl.debug.checkShaderErrors = import.meta.env.DEV
         gl.localClippingEnabled = true
         gl.toneMapping = NeutralToneMapping
         gl.toneMappingExposure = 1
@@ -283,9 +336,10 @@ export function Viewport() {
       <Camera vista={vista} />
       <Eixos vista={vista} tema={tema} eixos={cena.eixos} grade={cena.grade} caixa={cena.caixa} rotulos={cena.rotulos} />
       <Pecas planos={planos} vista={vista} tema={tema} />
+      <Aquecimento planos={planos} />
       <Cursor vista={vista} />
       <Captura />
-      <DensidadeAdaptativa />
+      {!SEM_RITMO && <Ritmo />}
       {MEDIR && <Medidor />}
     </Canvas>
   )

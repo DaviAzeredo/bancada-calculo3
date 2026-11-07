@@ -14,9 +14,9 @@ export type Feito = MalhaSup | MalhaSetas | MalhaLinhas | Marcadores
 
 export type Qualidade = { grade: number; implicita: number; desig: number; tubo: number }
 export const QUALIDADE: Record<'alta' | 'media' | 'baixa', Qualidade> = {
-  alta: { grade: 180, implicita: 88, desig: 72, tubo: 700 },
-  media: { grade: 120, implicita: 64, desig: 52, tubo: 500 },
-  baixa: { grade: 64, implicita: 40, desig: 36, tubo: 260 },
+  alta: { grade: 128, implicita: 48, desig: 52, tubo: 480 },
+  media: { grade: 96, implicita: 40, desig: 44, tubo: 360 },
+  baixa: { grade: 56, implicita: 32, desig: 32, tubo: 240 },
 }
 
 export type Opcoes = { nivel?: number; unitarias?: boolean; densidade?: number; linhasFluxo?: boolean }
@@ -820,8 +820,9 @@ function linhasDeFluxo(F: Expr[], dim: 2 | 3, c: Ctx): MalhaLinhas {
   const w = c.vista
   const sementes = grelhaCampo(w, dim === 2 ? 11 : 5, dim)
   const ev = compilador(c.nums)(F, ['x', 'y', 'z'])
-  const passos = 90
-  const ds = diagonal(w) / 110
+  // mesmo comprimento de linha com metade dos segmentos: cada segmento é um par de triângulos por quadro
+  const passos = 48
+  const ds = diagonal(w) / 58
   const seg: number[] = []
   const val: number[] = []
   let max = 0

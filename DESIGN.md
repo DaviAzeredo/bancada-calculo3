@@ -73,7 +73,7 @@ responsive_viewports: [375, 1360]
 | Estados | 4 | Todos do contrato, com recuperação (criar controle, ação por objeto) |
 | Responsivo | 3,5 | Sem estouro em 375 px; app encolhe com o teclado virtual |
 | Acessibilidade | 3 | Rótulos, foco visível, movimento reduzido; sem auditoria com leitor de tela |
-| Interação | 3,5 | Edição viva, malha grossa ao arrastar e fina ao soltar |
-| Performance | 4 | 193 kB gz na primeira tela; 0 buffer por quadro; Intel UHD com quadro sincronizado: 82 a 197 quadros/s na galeria, 30 a 56 no estresse; densidade adaptativa |
+| Interação | 3,5 | Edição viva, malha grossa ao arrastar e fina ao soltar; busca no guia; controles logo abaixo de quem os usa |
+| Performance | 4 | 197 kB gz na primeira tela; meta de 120 quadros/s: 37 de 38 cenas com todo quadro abaixo de 8,3 ms numa Intel UHD na bateria, e densidade presa ao ritmo da tela; 5 a 12 chamadas de desenho por quadro |
 
 Média 3,55. Nenhuma dimensão abaixo de 3.

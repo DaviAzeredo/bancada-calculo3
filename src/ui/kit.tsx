@@ -55,4 +55,5 @@ export const Icone = {
   lixo: <I><path d="M3 4.500h10M6.500 4.500V3h3v1.500M4.500 4.500l.6 8.500h5.800l.6-8.500" /></I>,
   cima: <I><path d="M8 13V3M4 7l4-4 4 4" /></I>,
   baixo: <I><path d="M8 3v10M4 9l4 4 4-4" /></I>,
+  busca: <I><circle cx="7" cy="7" r="4.5" /><path d="m10.4 10.4 3.1 3.1" /></I>,
 }

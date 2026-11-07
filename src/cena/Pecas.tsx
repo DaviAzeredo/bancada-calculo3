@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { BufferAttribute, BufferGeometry, Color, type Group, type InstancedMesh, Matrix4, type Mesh, MeshStandardMaterial, NormalBlending, type Plane, Quaternion, ShaderMaterial, Vector3 } from 'three'
+import { BufferAttribute, BufferGeometry, CanvasTexture, Color, Group, InstancedMesh, Matrix4, Mesh, MeshLambertMaterial, NormalBlending, type Plane, Points, Quaternion, ShaderMaterial, Sprite, SpriteMaterial, Vector3 } from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
@@ -32,6 +32,9 @@ function Superficie({ m, linha, planos, vista, tema }: { m: MalhaSup; linha: Lin
     if (mat.transparent !== transparente) {
       mat.transparent = transparente
       mat.depthWrite = !transparente
+      // uma passada só: a superfície tem uma cor, então a ordem da mistura dentro dela quase não
+      // aparece, e as duas passadas (verso, depois frente) dobravam o custo de uma esfera na tela
+      mat.forceSinglePass = transparente
       mat.needsUpdate = true
     }
     mat.opacity = opacidade
@@ -65,7 +68,7 @@ function Setas({ m, linha, vista }: { m: MalhaSetas; linha: Linha; vista: Vista 
   if (n > cap) setCap(Math.ceil(n * 1.3))
   const ref = useRef<InstancedMesh>(null)
   const invalida = useThree((s) => s.invalidate)
-  const mat = useMemo(() => new MeshStandardMaterial({ roughness: 0.45, metalness: 0.02 }), [])
+  const mat = useMemo(() => new MeshLambertMaterial(), [])
   const unit = linha.opc.unitarias
   useLayoutEffect(() => {
     const im = ref.current
@@ -150,7 +153,7 @@ function Seta({ p, v, cor, escala, rotulo, tema }: { p: [number, number, number]
   return (
     <group>
       <mesh position={p} quaternion={q} scale={[escala, escala, C]} geometry={geometriaSeta()}>
-        <meshStandardMaterial color={cor} roughness={0.4} />
+        <meshLambertMaterial color={cor} />
       </mesh>
       {rotulo && <Rotulo texto={rotulo} pos={fim} cor={tema.texto} px={13} peso={600} />}
     </group>
@@ -176,12 +179,12 @@ function Pa({ p, v, cor, escala }: { p: [number, number, number]; v: [number, nu
         {[0, 1, 2, 3].map((i) => (
           <mesh key={i} rotation={[0, 0, (i * Math.PI) / 2]} position={[Math.cos((i * Math.PI) / 2) * escala * 1.4, Math.sin((i * Math.PI) / 2) * escala * 1.4, 0]} scale={[escala * 2.6, escala * 0.14, escala * 1.6]}>
             <boxGeometry args={[1, 1, 1]} />
-            <meshStandardMaterial color={cor} roughness={0.5} />
+            <meshLambertMaterial color={cor} />
           </mesh>
         ))}
         <mesh rotation={[Math.PI / 2, 0, 0]} scale={[escala * 0.12, escala * 3.2, escala * 0.12]}>
           <cylinderGeometry args={[1, 1, 1, 10]} />
-          <meshStandardMaterial color={cor} roughness={0.5} />
+          <meshLambertMaterial color={cor} />
         </mesh>
       </group>
     </group>
@@ -200,8 +203,8 @@ function Marcas({ m, linha, vista, tema }: { m: Marcadores; linha: Linha; vista:
           return (
             <group key={i}>
               <mesh position={it.p} scale={diag * 0.0085}>
-                <sphereGeometry args={[1, 20, 14]} />
-                <meshStandardMaterial color={cor} roughness={0.35} />
+                <sphereGeometry args={[1, 16, 12]} />
+                <meshLambertMaterial color={cor} />
               </mesh>
               {it.rotulo && <Rotulo texto={it.rotulo} pos={[it.p[0], it.p[1], it.p[2] + diag * 0.024]} cor={tema.texto} px={13} peso={600} />}
             </group>
@@ -234,10 +237,11 @@ void main() {
 }`
 
 const CAUDA = 5
+const TOQUE = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
 
 /** Partículas no próprio campo: o programa em lote dá conta de milhares por quadro. */
 function Particulas({ F, dim, linha, vista, tema }: { F: Expr[]; dim: 2 | 3; linha: Linha; vista: Vista; tema: TemaCena }) {
-  const N = dim === 2 ? 900 : 1500
+  const N = Math.round((dim === 2 ? 900 : 1500) * (TOQUE ? 0.6 : 1))
   const total = N * CAUDA
   const nums = useBancada((s) => s.resolvido.numeros)
   const prog = useMemo(() => compila(F, ['x', 'y', 'z', ...Object.keys(nums)]), [F, nums])
@@ -329,6 +333,58 @@ function Peca({ f, linha, planos, vista, tema }: { f: Feito; linha: Linha; plano
     case 'linhas': return <Linhas m={f} planos={planos} usarCor />
     case 'marcas': return <Marcas m={f} linha={linha} vista={vista} tema={tema} />
   }
+}
+
+/** Materiais do aquecimento: ficam vivos para o programa de cada um continuar no cache da placa. */
+const aquecidos: unknown[] = []
+
+/**
+ * Compila de antemão, em paralelo e fora da tela, um programa de cada tipo de peça. Sem isso, o
+ * primeiro exemplo com superfície transparente, seta ou partícula compilava no meio da animação
+ * e travava o quadro por dezenas de milissegundos. Os objetos ficam na camada 31, que a câmera
+ * não desenha; a compilação olha só se estão visíveis.
+ */
+export function Aquecimento({ planos }: { planos: Plane[] }) {
+  const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
+  const camera = useThree((s) => s.camera)
+  useEffect(() => {
+    // sem compilação paralela, aquecer travaria a página na abertura: fica a compilação sob demanda
+    if (!gl.extensions.has('KHR_parallel_shader_compile')) return
+    const g = new Group()
+    const tri = new BufferGeometry().setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+    const opaca = materialSuperficie(planos)
+    const transparente = materialSuperficie(planos)
+    transparente.transparent = true
+    transparente.depthWrite = false
+    transparente.opacity = 0.5
+    const setas = new InstancedMesh(geometriaSeta(), new MeshLambertMaterial(), 1)
+    setas.setColorAt(0, new Color())
+    const linhas = new LineSegments2(new LineSegmentsGeometry(), new LineMaterial({ linewidth: 1.5, vertexColors: true, transparent: true, opacity: 0.92, clippingPlanes: planos }))
+    const pontos = new Points(tri, new ShaderMaterial({ vertexShader: VERT_PART, fragmentShader: FRAG_PART, transparent: true, depthWrite: false, blending: NormalBlending, uniforms: { uCor: { value: new Color() }, uTam: { value: 5 } } }))
+    const cv = document.createElement('canvas')
+    cv.width = cv.height = 4
+    const rotulo = new Sprite(new SpriteMaterial({ map: new CanvasTexture(cv), sizeAttenuation: false, depthWrite: false, transparent: true }))
+    const objs = [new Mesh(tri, opaca), new Mesh(tri, transparente), setas, new Mesh(tri, new MeshLambertMaterial()), linhas, pontos, rotulo]
+    for (const o of objs) {
+      o.layers.set(31)
+      o.frustumCulled = false
+      g.add(o)
+    }
+    scene.add(g)
+    let vivo = true
+    gl.compileAsync(scene, camera)
+      .catch(() => undefined)
+      .finally(() => {
+        scene.remove(g)
+        if (vivo) aquecidos.push(...objs.map((o) => o.material))
+      })
+    return () => {
+      vivo = false
+      scene.remove(g)
+    }
+  }, [gl, scene, camera, planos])
+  return null
 }
 
 export function Pecas({ planos, vista, tema }: { planos: Plane[]; vista: Vista; tema: TemaCena }) {

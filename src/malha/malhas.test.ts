@@ -61,8 +61,9 @@ describe('superfícies', () => {
   it('esfera implícita: fechada, com área e volume certos', () => {
     const m = sup('x^2+y^2+z^2=1')
     expect(fechada(m)).toBe(true)
-    expect(area(m)).toBeCloseTo(4 * Math.PI, 2)
-    expect(volume(m)).toBeCloseTo((4 * Math.PI) / 3, 2)
+    // erro relativo: a grade implícita ficou mais grossa pela meta de 120 quadros/s
+    expect(Math.abs(area(m) / (4 * Math.PI) - 1)).toBeLessThan(1e-3)
+    expect(Math.abs(volume(m) / ((4 * Math.PI) / 3) - 1)).toBeLessThan(2e-3)
     expect(normaisCoerentes(m, (p) => p)).toBeLessThan(0.001)
   })
 
@@ -225,7 +226,7 @@ describe('curvas e campos', () => {
 
   it('nível do campo escalar', () => {
     const m = malha(['g(x,y,z)=x^2+y^2+z^2'], { nivel: 1 })[0] as MalhaSup
-    expect(area(m)).toBeCloseTo(4 * Math.PI, 2)
+    expect(Math.abs(area(m) / (4 * Math.PI) - 1)).toBeLessThan(1e-3)
     expect(m.faixa![0]).toBeLessThan(1)
     expect(m.faixa![1]).toBeGreaterThan(4)
   })

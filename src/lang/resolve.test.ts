@@ -183,6 +183,55 @@ describe('problemas clássicos de Cálculo III', () => {
     expect(t.pontos![0].tipo).toBe('máximo local')
   })
 
+  it('o cartão de pontos críticos mostra quais são, não só quantos', () => {
+    const r = calc('f(x,y)=x^3-3x+y^2', 'criticos(f)')
+    expect(r.exato).toContain('\\left(1,\\ 0\\right)')
+    expect(r.exato).toContain('\\left(-1,\\ 0\\right)')
+    expect(r.exato).toContain('mínimo local')
+    expect(r.exato).toContain('ponto de sela')
+    expect(r.exato).toContain('f = -2')
+    const muitos = calc('f(x,y)=sin(2x) sin(2y)', 'criticos(f)')
+    expect(muitos.pontos!.length).toBeGreaterThan(8)
+    expect(muitos.exato).toContain(`e mais ${muitos.pontos!.length - 8} no passo a passo`)
+  })
+
+  it('Lagrange diz onde ficam o máximo e o mínimo', () => {
+    const r = calc('f(x,y)=x+y', 'g(x,y)=x^2+y^2-1', 'lagrange(f,g)')
+    expect(r.exato).toContain('\\max = \\sqrt{2}\\ \\text{em}\\ \\left(\\frac{\\sqrt{2}}{2},\\ \\frac{\\sqrt{2}}{2}\\right)')
+    expect(r.exato).toContain('\\min = -\\sqrt{2}\\ \\text{em}\\ \\left(-\\frac{\\sqrt{2}}{2},\\ -\\frac{\\sqrt{2}}{2}\\right)')
+  })
+
+  it.each<[string, string, string]>([
+    ['hélice do exemplo', 'r(t)=(cos t, sin t, t/4), 0<=t<=4pi', '\\text{raio da hélice } 1,\\quad \\rho = \\tfrac{1}{\\kappa} = \\frac{17}{16}'],
+    ['hélice de raio 2', 'r(t)=(2cos t, 2sin t, t), 0<=t<=4pi', '\\text{raio da hélice } 2,\\quad \\rho = \\tfrac{1}{\\kappa} = \\frac{5}{2}'],
+    ['circunferência', 'r(t)=(3cos t, 3sin t), 0<=t<=2pi', '\\text{circunferência de raio } 3'],
+  ])('curvatura reconhece a forma: %s', (_n, curva, esperado) => {
+    const r = calc(curva, 'curvatura(r)')
+    expect(r.exato).toBe(esperado)
+  })
+
+  it('passo da hélice e raio de curvatura de curva qualquer', () => {
+    const h = calc('r(t)=(cos t, sin t, t/4), 0<=t<=4pi', 'curvatura(r)')
+    expect(h.passos.at(-1)!.tex).toContain('\\text{passo} = \\frac{2\\pi\\,|\\tau|}{\\kappa^{2}+\\tau^{2}} = \\frac{\\pi}{2}')
+    const p = calc('r(t)=(t, t^2, 0), 0<=t<=1', 'curvatura(r)')
+    expect(p.exato).toBeUndefined()
+    expect(p.passos.at(-1)!.titulo).toBe('Raio de curvatura')
+    const q = calc('r(t)=(t, t^2, 0), 0<=t<=1', 'curvatura(r, 0)')
+    expect(q.valor).toBeCloseTo(2)
+    expect(q.passos.at(-1)!.tex).toContain('= \\frac{1}{2}')
+  })
+
+  it.each<[string[], string[]]>([
+    [['F=(-y,x)', 'sonda(F,a,b,0)'], ['a', 'b']],
+    [['f(x,y)=x y', 'R: 0<=x<=1, 0<=y<=1', 'riemann(f,R,n)'], ['n']],
+    [['E: 0<=x<=1, 0<=y<=1, 0<=z<=1', 'fatia(E,c)'], ['c']],
+    [['r(t)=(cos t, sin t, t)', 'frenet(r,q)'], ['q']],
+    [['r(t)=(cos t, sin t, t)', 'curvatura(r,s)'], ['s']],
+    [['r(t)=(cos t, sin t, t)', 'torcao(r,s)'], ['s']],
+  ])('comando com número sem definir pede controle: %j', (fs, falta) => {
+    expect(uma(...fs).faltando.sort()).toEqual(falta)
+  })
+
   it('Lagrange', () => {
     const r = calc('f(x,y)=x+y', 'g(x,y)=x^2+y^2-1', 'lagrange(f,g)')
     expect(r.exato).toContain('\\max')

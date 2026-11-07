@@ -8,11 +8,35 @@ import { QUALIDADE, constroi } from './malha/malhas'
 const todos = EXEMPLOS.flatMap((t) => t.itens)
 const abre = (fontes: string[]) => resolve(fontes.map((fonte, i) => ({ id: `l${i}`, fonte })))
 
+/** Controles que aparecem acima da primeira expressão que os usa: confundem quem lê de cima para baixo. */
+function controlesAntesDoUso(fontes: string[]): string[] {
+  const erros: string[] = []
+  const estado = (a: ReturnType<typeof abre>['analises'][number]) => JSON.stringify([a.tipo, a.erro, a.faltando, a.rotulo])
+  const com = abre(fontes).analises.map(estado)
+  fontes.forEach((f, i) => {
+    const nome = /^\s*([A-Za-z]\w*)\s*=\s*-?[\d.]+\s*$/.exec(f)?.[1]
+    if (!nome) return
+    // usa o controle quem muda de estado quando ele some: falta de símbolo ou erro de argumento
+    const sem = abre(fontes.filter((_, j) => j !== i)).analises.map(estado)
+    const usos = sem.flatMap((s, j) => (s !== com[j < i ? j : j + 1] ? [j < i ? j : j + 1] : []))
+    if (!usos.length) erros.push(`${nome} não é usado`)
+    else if (Math.min(...usos) > i) erros.push(`${nome} aparece acima de quem o usa`)
+  })
+  return erros
+}
+
 describe('galeria', () => {
   it('ids únicos e todos os temas do curso', () => {
     expect(new Set(todos.map((e) => e.id)).size).toBe(todos.length)
     expect(EXEMPLOS.map((t) => t.tema)).toContain('Integrais de linha e de superfície')
     expect(todos.length).toBeGreaterThanOrEqual(36)
+  })
+
+  it('todo controle vem depois da expressão que o usa', () => {
+    expect(controlesAntesDoUso(['a=0.5', 'z=a x^2'])).toEqual(['a aparece acima de quem o usa'])
+    expect(controlesAntesDoUso(['z=a x^2', 'a=0.5'])).toEqual([])
+    const errados = todos.flatMap((e) => controlesAntesDoUso(estadoDe(e).linhas.map((l) => l.fonte)).map((m) => `${e.titulo}: ${m}`))
+    expect(errados).toEqual([])
   })
 
   it.each(todos.map((e) => [e.titulo, e] as const))('%s abre, desenha e calcula', (_t, e) => {
@@ -45,11 +69,13 @@ describe('ações por objeto', () => {
     const acoes = acoesDe(r.analises[0], r)
     expect(acoes.length).toBeGreaterThan(0)
     for (const ac of acoes) {
-      const s = abre([...fontes, ...ac.linhas.map((l) => l.fonte)])
+      const todas = [...fontes, ...ac.linhas.map((l) => l.fonte)]
+      const s = abre(todas)
       for (const a of s.analises) {
         expect(a.erro, ac.rotulo).toBeUndefined()
         expect(a.faltando, ac.rotulo).toEqual([])
       }
+      expect(controlesAntesDoUso(todas), ac.rotulo).toEqual([])
     }
   })
 })

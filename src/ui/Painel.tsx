@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { EXEMPLOS, estadoDe } from '../exemplos'
+import { buscaExemplos, buscaGuia } from '../guia'
 import { useBancada } from '../store'
 import { Formula } from './Formula'
 import { Icone, Pilula } from './kit'
@@ -25,7 +26,7 @@ function Expressoes() {
       <div className="flex items-center gap-2 border-t border-line-soft px-3 py-2">
         <button type="button" onClick={() => adiciona('')} className="inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-ctl)] bg-accent px-3 text-[13px] font-medium text-accent-ink transition-opacity duration-150 hover:opacity-90">
           {Icone.mais}
-          Nova linha
+          Nova expressão
         </button>
         <button type="button" onClick={limpa} className="h-8 rounded-[var(--radius-ctl)] px-2.5 text-[13px] text-text-2 hover:bg-surface-3 hover:text-text">Limpar</button>
       </div>
@@ -63,93 +64,93 @@ function Exemplos({ aoEscolher }: { aoEscolher: () => void }) {
   )
 }
 
-const GUIA: { tema: string; itens: [string, string, string][] }[] = [
-  {
-    tema: 'Superfícies',
-    itens: [
-      ['z = x^2 - y^2', 'z=x^2-y^2', 'Gráfico explícito (também x = … e y = …)'],
-      ['x^2+y^2+z^2=4', 'x^2+y^2+z^2=4', 'Superfície implícita'],
-      ['f(x,y) = \\sin x', 'f(x,y)=\\sin x', 'Função com nome, usável em outras linhas'],
-      ['S(u,v) = (u, v, uv)', 'S(u,v)=\\left(u,v,uv\\right),\\ -1\\le u\\le1,\\ -1\\le v\\le1', 'Paramétrica, com domínio após a vírgula'],
-      ['z = r^2', 'z=r^2', 'Cilíndricas: r, θ'],
-      ['\\rho = 2', '\\rho=2', 'Esféricas: ρ, θ, φ'],
-    ],
-  },
-  {
-    tema: 'Curvas e campos',
-    itens: [
-      ['r(t) = (\\cos t, \\sin t, t)', 'r(t)=\\left(\\cos t,\\sin t,t\\right)', 'Curva paramétrica'],
-      ['F(x,y,z) = (y, -x, z)', 'F(x,y,z)=\\left(y,-x,z\\right)', 'Campo vetorial'],
-      ['F = y\\,\\mathbf{i} - x\\,\\mathbf{j}', 'F=y\\mathbf{i}-x\\mathbf{j}', 'Notação i, j, k'],
-      ['P = (1, 2, 3)', 'P=\\left(1,2,3\\right)', 'Maiúscula é ponto, minúscula é vetor'],
-      ['B(t) = (1-t)P + tQ', 'B(t)=\\left(1-t\\right)\\left(1,0\\right)+t\\left(0,1\\right),\\ 0\\le t\\le1', 'Segmento de P a Q, com t de 0 a 1'],
-    ],
-  },
-  {
-    tema: 'Regiões',
-    itens: [
-      ['R: 0 \\le x \\le 1,\\ 0 \\le y \\le x', 'R:0\\le x\\le1,\\ 0\\le y\\le x', 'Região plana iterada'],
-      ['E: 0 \\le \\rho \\le 1,\\ 0 \\le \\varphi \\le \\pi,\\ 0 \\le \\theta \\le 2\\pi', 'E:0\\le\\rho\\le1,\\ 0\\le\\varphi\\le\\pi,\\ 0\\le\\theta\\le2\\pi', 'Sólido em esféricas'],
-      ['x^2+y^2 \\le z \\le 4', 'x^2+y^2\\le z\\le4', 'Região por desigualdades'],
-      ['z = x^2 \\{x^2+y^2 \\le 1\\}', 'z=x^2\\left\\lbrace x^2+y^2\\le1\\right\\rbrace', 'Restrição entre chaves'],
-    ],
-  },
-  {
-    tema: 'Integrais',
-    itens: [
-      ['\\int_0^1\\int_0^x xy\\,dy\\,dx', '\\int_0^1\\int_0^xxy\\,dy\\,dx', 'Iterada: desenha o sólido'],
-      ['\\iint_R f\\,dA', '\\iint_{R}f\\,dA', 'Sobre região com nome'],
-      ['\\iiint_E f\\,dV', '\\iiint_{E}f\\,dV', 'Com jacobiano automático'],
-      ['\\oint_C \\mathbf{F}\\cdot d\\mathbf{r}', '\\oint_{C}F\\cdot dr', 'Integral de linha'],
-      ['\\int_A \\mathbf{F}\\cdot d\\mathbf{r} + \\int_B \\mathbf{F}\\cdot d\\mathbf{r}', '\\int_{A}F\\cdot dr+\\int_{B}F\\cdot dr', 'Contorno por pedaços: some as parcelas'],
-      ['\\iint_S \\mathbf{F}\\cdot d\\mathbf{S}', '\\iint_{S}F\\cdot dS', 'Fluxo por uma superfície'],
-    ],
-  },
-  {
-    tema: 'Comandos',
-    itens: [
-      ['\\nabla f,\\ \\nabla\\cdot F,\\ \\nabla\\times F', '\\operatorname{grad}\\left(f\\right)', 'grad, div, rot, lap'],
-      ['\\operatorname{tangente}(f, a, b)', '\\operatorname{tangente}\\left(f,a,b\\right)', 'Plano tangente'],
-      ['\\operatorname{criticos}(f)', '\\operatorname{criticos}\\left(f\\right)', 'Com teste da segunda derivada'],
-      ['\\operatorname{lagrange}(f, g)', '\\operatorname{lagrange}\\left(f,g\\right)', 'Extremos com g = 0'],
-      ['\\operatorname{potencial}(F)', '\\operatorname{potencial}\\left(F\\right)', 'Campo conservativo'],
-      ['\\operatorname{green}(F, R)', '\\operatorname{green}\\left(F,R\\right)', 'Também stokes(F, S) e gauss(F, E)'],
-      ['\\operatorname{riemann}(f, R, n)', '\\operatorname{riemann}\\left(f,R,n\\right)', 'Colunas que convergem'],
-      ['\\operatorname{fatia}(E, c)', '\\operatorname{fatia}\\left(E,c\\right)', 'Seção e limites de dentro'],
-      ['\\operatorname{jacobiano}((u+v, u-v), u, v)', '\\operatorname{jacobiano}\\left(\\left(u+v,u-v\\right),u,v\\right)', 'Determinante da mudança'],
-    ],
-  },
-]
-
 function Guia({ aoInserir }: { aoInserir: () => void }) {
   const adiciona = useBancada((s) => s.adiciona)
+  const carrega = useBancada((s) => s.carrega)
+  const [busca, setBusca] = useState('')
+  const temas = useMemo(() => buscaGuia(busca), [busca])
+  const exemplos = useMemo(() => buscaExemplos(busca).slice(0, 4), [busca])
+  const insere = (fonte: string) => {
+    adiciona(fonte)
+    aoInserir()
+  }
+  const abre = (e: (typeof exemplos)[number]) => {
+    carrega(estadoDe(e))
+    aoInserir()
+  }
+  const total = temas.reduce((s, t) => s + t.itens.length, 0)
   return (
-    <div className="rolagem min-h-0 flex-1 px-3 py-3">
-      <p className="mb-3 px-1 text-[12.5px] leading-snug text-text-3">
-        Escreva como no caderno: valem sen, tg, cossec e arctg, além de <span className="num">x^2</span>, <span className="num">sqrt</span>, <span className="num">pi</span>, <span className="num">theta</span> e <span className="num">{'<='}</span>. Em <span className="num">int_0^1</span>, a barra de espaço sai do limite. Clique num item para trazê-lo à lista.
-      </p>
-      {GUIA.map((g) => (
-        <section key={g.tema} className="mb-4">
-          <h2 className="mb-1 px-1 text-[11.5px] font-semibold tracking-[0.05em] text-text-3 uppercase">{g.tema}</h2>
-          <ul>
-            {g.itens.map(([t, f, d]) => (
-              <li key={f}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    adiciona(f)
-                    aoInserir()
-                  }}
-                  className="block w-full rounded-[var(--radius-ctl)] px-2 py-1.5 text-left transition-colors duration-150 hover:bg-surface-3"
-                >
-                  <span className="block overflow-hidden text-[13px] text-text"><Formula tex={t} /></span>
-                  <span className="block text-[12px] text-text-3">{d}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="border-b border-line-soft px-3 py-2">
+        <label className="relative block">
+          <span className="sr-only">Pesquisar no guia</span>
+          <span aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-text-3">{Icone.busca}</span>
+          <input
+            type="search"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setBusca('')
+              if (e.key !== 'Enter' || !busca.trim()) return
+              // Enter traz o primeiro resultado, como numa paleta de comandos
+              if (temas[0]) insere(temas[0].itens[0].fonte)
+              else if (exemplos[0]) abre(exemplos[0])
+            }}
+            placeholder="Pesquisar: rotacional, volume, Stokes…"
+            enterKeyHint="search"
+            autoComplete="off"
+            spellCheck={false}
+            className="h-8 w-full rounded-[var(--radius-ctl)] border border-line bg-surface-2 pr-2 pl-8 text-[13px] text-text outline-none placeholder:text-text-3 focus:border-accent"
+          />
+        </label>
+        {busca.trim() && (
+          <p className="mt-1 px-0.5 text-[11.5px] text-text-3" aria-live="polite">
+            {total || exemplos.length ? `${total} ${total === 1 ? 'item' : 'itens'}${exemplos.length ? ` e ${exemplos.length} ${exemplos.length === 1 ? 'exemplo' : 'exemplos'}` : ''}. Enter traz o primeiro.` : 'Nada encontrado.'}
+          </p>
+        )}
+      </div>
+      <div className="rolagem min-h-0 flex-1 px-3 py-3">
+        {!busca.trim() && (
+          <p className="mb-3 px-1 text-[12.5px] leading-snug text-text-3">
+            Escreva como no caderno: valem sen, tg, cossec e arctg, além de <span className="num">x^2</span>, <span className="num">sqrt</span>, <span className="num">pi</span>, <span className="num">theta</span> e <span className="num">{'<='}</span>. Em <span className="num">int_0^1</span>, a barra de espaço sai do limite. Clique num item para trazê-lo à lista.
+          </p>
+        )}
+        {busca.trim() && !total && !exemplos.length && (
+          <p className="px-1 text-[12.5px] leading-snug text-text-3">
+            Nada com “{busca.trim()}”. Tente uma palavra do curso, como gradiente, volume, fluxo ou esféricas.
+          </p>
+        )}
+        {temas.map((g) => (
+          <section key={g.tema} className="mb-4">
+            <h2 className="mb-1 px-1 text-[11.5px] font-semibold tracking-[0.05em] text-text-3 uppercase">{g.tema}</h2>
+            <ul>
+              {g.itens.map((i) => (
+                <li key={i.fonte}>
+                  <button type="button" onClick={() => insere(i.fonte)} className="block w-full rounded-[var(--radius-ctl)] px-2 py-1.5 text-left transition-colors duration-150 hover:bg-surface-3">
+                    <span className="block overflow-hidden text-[13px] text-text"><Formula tex={i.tex} /></span>
+                    <span className="block text-[12px] text-text-3">{i.desc}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+        {exemplos.length > 0 && (
+          <section className="mb-4">
+            <h2 className="mb-1 px-1 text-[11.5px] font-semibold tracking-[0.05em] text-text-3 uppercase">Exemplos prontos</h2>
+            <ul>
+              {exemplos.map((e) => (
+                <li key={e.id}>
+                  <button type="button" onClick={() => abre(e)} className="block w-full rounded-[var(--radius-ctl)] px-2 py-1.5 text-left transition-colors duration-150 hover:bg-surface-3">
+                    <span className="block text-[13.5px] font-medium text-text">{e.titulo}</span>
+                    <span className="block text-[12.5px] leading-snug text-text-3">{e.nota}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
     </div>
   )
 }

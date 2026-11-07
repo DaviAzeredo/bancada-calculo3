@@ -40,9 +40,9 @@ const INICIO: EstadoSalvo = {
   vista: { x: [-3, 3], y: [-3, 3], z: [-3, 3] },
   linhas: [
     { fonte: 'f(x,y)=\\frac{x^2-y^2}{3}', visivel: true, cor: 0, opc: { contornos: true } },
+    { fonte: '\\operatorname{tangente}\\left(f,a,b\\right)', visivel: true, cor: 1, opc: { opacidade: 0.72 } },
     { fonte: 'a=1.5', visivel: true, cor: 1, opc: { min: -3, max: 3 } },
     { fonte: 'b=1', visivel: true, cor: 2, opc: { min: -3, max: 3 } },
-    { fonte: '\\operatorname{tangente}\\left(f,a,b\\right)', visivel: true, cor: 1, opc: { opacidade: 0.72 } },
   ],
 }
 

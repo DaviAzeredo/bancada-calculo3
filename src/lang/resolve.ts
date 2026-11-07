@@ -329,6 +329,7 @@ class Analisador {
         const t0 = arg[1] ? esca(arg[1]) : null
         a.rotulo = f === 'curvatura' ? 'Curvatura' : 'Torção'
         if (t0) a.desenhos.push({ d: 'ponto', p: c.r.map((x) => subst(x, { [c.t.v]: t0 })) })
+        if (t0) this.falta(a, [t0], [])
         a.calcula = (n) => (f === 'curvatura' ? C.curvatura(c, t0, n) : C.torcao(c, t0, n))
         return
       }
@@ -336,6 +337,7 @@ class Analisador {
         pede(2, 'frenet(C, t₀)')
         const c = curva(arg[0])
         const t0 = esca(arg[1])
+        this.falta(a, [t0], [])
         const v = c.t.v
         const r3 = c.r.length === 2 ? [...c.r, ZERO] : c.r
         const d1 = r3.map((x) => deriva(x, v))
@@ -468,6 +470,7 @@ class Analisador {
         const d = nomeFn(arg[0])
         const r = regiao(arg[1], 2)
         const nCel = esca(arg[2])
+        this.falta(a, [nCel], [])
         if (ehVetor(d.corpo)) throw new ErroCalculo('A soma de Riemann pede função escalar')
         const corpo = d.corpo
         a.rotulo = 'Soma de Riemann'
@@ -479,6 +482,7 @@ class Analisador {
         pede(4, 'sonda(F, a, b, c)')
         const F = campo(arg[0])
         const p = arg.slice(1).map(esca)
+        this.falta(a, p, [])
         a.rotulo = 'Sonda de campo'
         a.desenhos.push({ d: 'sonda', p, F }, { d: 'ponto', p })
         a.calcula = (n) => C.resultadoSonda(F, p, n)
@@ -488,6 +492,7 @@ class Analisador {
         pede(2, 'fatia(E, c)')
         const r = regiao(arg[0])
         const c = esca(arg[1])
+        this.falta(a, [c], [])
         const [u, v, w] = r.lim
         const m = { [u.v]: c }
         const T = posicao(r.coords, r.lim.length).map((e) => subst(e, m))
@@ -999,7 +1004,7 @@ export function resolve(entradas: Entrada[], vista: Vista = VISTA_PADRAO): Resol
       linhas.push({ e, l, define: d?.nome ?? l.nome ?? null, usa: idsDaLinha(l) })
     } catch (err) {
       a.tipo = 'erro'
-      a.erro = err instanceof ErroSintaxe ? err.message : 'Não entendi esta linha'
+      a.erro = err instanceof ErroSintaxe ? err.message : 'Não entendi esta expressão'
     }
   }
   // definição antes de uso, em qualquer ordem que as linhas estejam escritas
@@ -1009,7 +1014,7 @@ export function resolve(entradas: Entrada[], vista: Vista = VISTA_PADRAO): Resol
     if (donos.has(x.define)) {
       const a = analises.get(x.e.id)!
       a.tipo = 'erro'
-      a.erro = `${x.define} já foi definido em outra linha`
+      a.erro = `${x.define} já foi definido em outra expressão`
       x.define = null
       x.usa = new Set()
       continue
@@ -1021,7 +1026,7 @@ export function resolve(entradas: Entrada[], vista: Vista = VISTA_PADRAO): Resol
   const emCurso = new Set<(typeof linhas)[number]>()
   const processa = (x: (typeof linhas)[number]) => {
     if (feitas.has(x)) return
-    if (emCurso.has(x)) throw new ErroCalculo(`Definição circular em ${x.define ?? 'uma linha'}`)
+    if (emCurso.has(x)) throw new ErroCalculo(`Definição circular em ${x.define ?? 'uma expressão'}`)
     emCurso.add(x)
     for (const u of x.usa) {
       const dono = donos.get(u)
@@ -1045,7 +1050,7 @@ export function resolve(entradas: Entrada[], vista: Vista = VISTA_PADRAO): Resol
     } catch (err) {
       const a = analises.get(x.e.id)!
       a.tipo = 'erro'
-      a.erro = err instanceof Error ? err.message : 'Erro nesta linha'
+      a.erro = err instanceof Error ? err.message : 'Erro nesta expressão'
       feitas.add(x)
     }
   }
