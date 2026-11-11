@@ -257,3 +257,17 @@ describe('problemas clássicos de Cálculo III', () => {
     expect(r.selo === 'exato' && r.valor === -2).toBe(false)
   })
 })
+
+describe('cabeçalho com número', () => {
+  it('diz o que fazer, em vez de tratar a linha como equação', () => {
+    for (const f of ['f(570,y)=x^2-y^2', 'f\\left(570,y\\right)=x', 'f(1,2)=3', 'g(-1)=x']) {
+      const r = resolve(linhas(f, '\\operatorname{tangente}\\left(f,1,1\\right)'))
+      expect(r.analises[0].erro, f).toMatch(/vão só variáveis/)
+    }
+  })
+
+  it('com f definida em outra linha, f(1, y) = z continua sendo equação', () => {
+    expect(uma('f(x,y)=x^2+y^2', 'f(1,y)=z').erro).toBeUndefined()
+  })
+})
+

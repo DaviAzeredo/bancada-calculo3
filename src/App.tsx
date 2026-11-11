@@ -3,6 +3,7 @@ import { decodifica } from './compartilha'
 import { ligaMotor, usePecas } from './motor'
 import { useBancada } from './store'
 import { Barra, LeituraCursor, Medicao } from './ui/Barra'
+import { Limite } from './ui/Limite'
 import { Painel } from './ui/Painel'
 
 const Viewport = lazy(() => import('./cena/Viewport').then((m) => ({ default: m.Viewport })))
@@ -27,6 +28,8 @@ function Carregando() {
 
 export function App() {
   const tema = useBancada((s) => s.tema)
+  // muda quando alguma expressão muda: é a deixa para a parte que falhou tentar de novo
+  const chave = useBancada((s) => s.linhas.map((l) => l.fonte).join('\n'))
   useEffect(() => {
     document.documentElement.dataset.tema = tema
   }, [tema])
@@ -42,12 +45,16 @@ export function App() {
   return (
     <div className="flex h-[calc(100dvh-var(--teclado,0px))] flex-col-reverse md:flex-row">
       <div className="flex min-h-0 w-full flex-[1.15_1_0] flex-col border-line-soft md:w-[380px] md:flex-none md:border-r">
-        <Painel />
+        <Limite chave={chave} titulo="O painel encontrou um erro." dica="Tente de novo; se voltar, recarregue a página.">
+          <Painel />
+        </Limite>
       </div>
       <main className="relative min-h-0 min-w-0 flex-1" aria-label="Cena 3D">
-        <Suspense fallback={null}>
-          <Viewport />
-        </Suspense>
+        <Limite chave={chave} titulo="A cena não conseguiu desenhar isto." dica="Mude ou apague a última expressão, ou tente de novo.">
+          <Suspense fallback={null}>
+            <Viewport />
+          </Suspense>
+        </Limite>
         <Carregando />
         <Barra />
         <LeituraCursor />

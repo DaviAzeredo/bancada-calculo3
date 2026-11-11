@@ -5,7 +5,7 @@ import type { Limite } from '../math/quad'
 import { tex, texSimbolo } from '../math/tex'
 import * as C from './calculos'
 import type { Curva, Nums, Resultado, Superficie } from './calculos'
-import { ErroSintaxe } from './lexer'
+import { COMANDOS, ErroSintaxe } from './lexer'
 import { type Item, type Linha, type No, nomeDefinido, parseLinha } from './parser'
 import { type Regiao, cadeia, coordsDasVariaveis, ordena, posicao, regiaoDeItens } from './regiao'
 import { ErroCalculo, type Escopo, type Valor, coordenadasDe, ehVetor, escopoVazio, paraValor } from './valor'
@@ -1020,6 +1020,18 @@ export function resolve(entradas: Entrada[], vista: Vista = VISTA_PADRAO): Resol
       continue
     }
     donos.set(x.define, x)
+  }
+  // f(570, y) = …: parece definição, mas há um número onde vai uma variável. Sem esta checagem, a
+  // linha virava equação com uma f que não existe, e o aviso não dizia o que fazer.
+  for (const x of linhas) {
+    const lhs = x.l.itens[0]?.partes[0]
+    if (x.define || x.l.nome || x.l.itens[0].ops.join() !== '=' || lhs?.t !== 'call') continue
+    if (donos.has(lhs.f) || COMANDOS.includes(lhs.f)) continue
+    if (!lhs.a.every((n) => n.t === 'id' || n.t === 'num' || (n.t === 'neg' && n.a.t === 'num'))) continue
+    const a = analises.get(x.e.id)!
+    a.tipo = 'erro'
+    a.erro = `Entre os parênteses de ${lhs.f} vão só variáveis, como ${lhs.f}(x, y)`
+    x.usa = new Set()
   }
   const pendentes = linhas.filter((x) => analises.get(x.e.id)!.tipo !== 'erro')
   const feitas = new Set<(typeof linhas)[number]>()

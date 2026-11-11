@@ -1,9 +1,11 @@
 import { memo, useState } from 'react'
 import { acoesDe, comoFuncao } from '../acoes'
+import { cabecaSolta, cabecaTex, comCabeca, contextoDe, separaCabeca, variaveisDe } from '../lang/cabeca'
 import type { Analise } from '../lang/resolve'
 import { CORES, type Linha, useBancada } from '../store'
 import { Cartao } from './Cartao'
 import { CampoMat } from './CampoMat'
+import { Formula } from './Formula'
 import { BotaoIcone, Icone, Pilula } from './kit'
 
 function passoRedondo(faixa: number) {
@@ -151,6 +153,29 @@ export const LinhaExpr = memo(function LinhaExpr({ linha, analise, indice }: { l
   const resultado = useBancada((s) => s.resultados[linha.id])
   const vizinhos = useBancada((s) => s.linhas)
   const [abreAjustes, setAbreAjustes] = useState(false)
+  // linha sem cabeçalho que está sendo digitada: "f(x,y)=" só trava quando o aluno sai dela
+  const [livre, setLivre] = useState(false)
+  const cab = livre ? null : separaCabeca(linha.fonte)
+  const contexto = () => contextoDe(useBancada.getState().linhas.map((l) => l.fonte))
+  const mudaCorpo = (corpo: string) => {
+    if (!cab) return atualiza(linha.id, corpo)
+    atualiza(linha.id, comCabeca(cab.nome, variaveisDe(corpo, cab.nome, cab.params, contexto()), corpo))
+  }
+  const sai = () => {
+    setLivre(false)
+    // cabeçalho escrito à mão: as variáveis passam a ser as do corpo, como nas outras linhas
+    const fonte = useBancada.getState().linhas.find((l) => l.id === linha.id)?.fonte ?? ''
+    const c = cabecaSolta(fonte)
+    if (!c) return
+    const ctx = contexto()
+    // f já definida em outra linha: f(1, y) = z é uma equação com ela, não um cabeçalho
+    if ((ctx.definicoes.get(c.nome) ?? 0) > 1) return
+    // corpo sem variável conhecida (h(a, b) = a + b, f(1, 2) = 3): fica como foi escrito
+    const vs = variaveisDe(c.corpo, c.nome, [], ctx)
+    if (!vs.length) return
+    const certa = comCabeca(c.nome, vs, c.corpo)
+    if (certa !== fonte) atualiza(linha.id, certa)
+  }
   const temDesenho = analise.desenhos.length > 0
   const foca = (delta: number) => {
     const i = vizinhos.findIndex((l) => l.id === linha.id)
@@ -178,12 +203,23 @@ export const LinhaExpr = memo(function LinhaExpr({ linha, analise, indice }: { l
             <span className="num text-[11px] text-text-3">{indice + 1}</span>
           )}
         </button>
-        <div className="min-w-0 flex-1" onClick={() => seleciona(linha.id)}>
+        <div className="flex min-w-0 flex-1 items-center" onClick={() => seleciona(linha.id)}>
+          {cab && (
+            <span
+              className="shrink-0 pl-[2px] text-[16px] text-text-2 select-none"
+              title="O nome e as variáveis vêm do site: as variáveis mudam conforme o que você escreve depois do ="
+            >
+              <Formula tex={cabecaTex(cab.nome, cab.params)} />
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
           <CampoMat
-            valor={linha.fonte}
-            rotulo={`Expressão ${indice + 1}`}
+            key={cab ? 'corpo' : 'livre'}
+            valor={cab ? cab.corpo : linha.fonte}
+            rotulo={cab ? `Expressão ${indice + 1}, depois de ${cab.nome}(${cab.params.join(', ')}) =` : `Expressão ${indice + 1}`}
+            exemplo={cab ? (cab.params.length === 1 ? ['(\\cos t,\\sin t,t)','(cos t, sen t, t)'] : cab.params[0] === 'u' ? ['(u,v,u^2)', '(u, v, u²)'] : ['x^2-y^2', 'x² − y²']) : undefined}
             foco={foco}
-            aoMudar={(v) => atualiza(linha.id, v)}
+            aoMudar={mudaCorpo}
             aoEnter={() => adiciona('', linha.id)}
             aoApagarVazia={() => {
               foca(-1)
@@ -194,8 +230,11 @@ export const LinhaExpr = memo(function LinhaExpr({ linha, analise, indice }: { l
             aoFocar={() => {
               seleciona(linha.id)
               setFoco(null)
+              if (!cab) setLivre(true)
             }}
+            aoSair={sai}
           />
+          </div>
         </div>
         <BotaoIcone rotulo="Ajustes da expressão" ativo={abreAjustes} onClick={() => setAbreAjustes(!abreAjustes)} className="mt-0.5">{Icone.ajuste}</BotaoIcone>
       </div>

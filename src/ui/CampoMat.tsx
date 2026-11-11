@@ -93,17 +93,22 @@ type Props = {
   aoSubir?: () => void
   aoDescer?: () => void
   aoFocar?: () => void
+  aoSair?: () => void
+  /** Exemplo do campo vazio, em LaTeX e em texto. */
+  exemplo?: [string, string]
 }
 
-export function CampoMat({ valor, rotulo, foco, aoMudar, aoEnter, aoApagarVazia, aoSubir, aoDescer, aoFocar }: Props) {
+const EXEMPLO: [string, string] = ['z=x^2-y^2', 'z = x² − y²']
+
+export function CampoMat({ valor, rotulo, foco, aoMudar, aoEnter, aoApagarVazia, aoSubir, aoDescer, aoFocar, aoSair, exemplo = EXEMPLO }: Props) {
   // linhas novas nascem com o editor pronto: o campo provisório roubaria o foco pedido
   const [pronto, setPronto] = useState(jaCarregou && !!foco)
   const ref = useRef<MathfieldElement>(null)
   // clicou na fórmula antes da vez dela: vira editor na hora e recebe o foco
   const querFoco = useRef(!!foco)
   const vivo = useRef(true)
-  const cb = useRef({ aoMudar, aoEnter, aoApagarVazia, aoSubir, aoDescer, aoFocar })
-  cb.current = { aoMudar, aoEnter, aoApagarVazia, aoSubir, aoDescer, aoFocar }
+  const cb = useRef({ aoMudar, aoEnter, aoApagarVazia, aoSubir, aoDescer, aoFocar, aoSair })
+  cb.current = { aoMudar, aoEnter, aoApagarVazia, aoSubir, aoDescer, aoFocar, aoSair }
 
   useEffect(() => {
     vivo.current = true
@@ -137,7 +142,7 @@ export function CampoMat({ valor, rotulo, foco, aoMudar, aoEnter, aoApagarVazia,
     mf.smartFence = true
     mf.smartSuperscript = true
     mf.inlineShortcuts = { ...mf.inlineShortcuts, ...atalhos }
-    mf.placeholder = '\\text{escreva, por exemplo, } z=x^2-y^2'
+    mf.placeholder = `\\text{escreva, por exemplo, } ${exemplo[0]}`
     mf.value = valor
     const aoInput = () => cb.current.aoMudar(mf.getValue('latex-without-placeholders'))
     const aoTecla = (e: KeyboardEvent) => {
@@ -160,6 +165,7 @@ export function CampoMat({ valor, rotulo, foco, aoMudar, aoEnter, aoApagarVazia,
     // no toque, sem foco o editor volta a ser fórmula: arrastar por cima dele não reabre o teclado
     let espera: ReturnType<typeof setTimeout> | undefined
     const aoBlur = () => {
+      cb.current.aoSair?.()
       if (!TOQUE) return
       clearTimeout(espera)
       espera = setTimeout(() => {
@@ -178,6 +184,12 @@ export function CampoMat({ valor, rotulo, foco, aoMudar, aoEnter, aoApagarVazia,
       mf.removeEventListener('blur', aoBlur)
     }
   }, [pronto]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // f(u, v) que passou a f(x, y): o exemplo do campo vazio acompanha
+  useEffect(() => {
+    const mf = ref.current
+    if (mf && pronto) mf.placeholder = `\\text{escreva, por exemplo, } ${exemplo[0]}`
+  }, [exemplo[0], pronto]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // texto que mudou de fora (controle deslizante, exemplo): sem roubar o cursor de quem digita
   useEffect(() => {
@@ -210,7 +222,7 @@ export function CampoMat({ valor, rotulo, foco, aoMudar, aoEnter, aoApagarVazia,
         }}
         className="flex min-h-[34px] w-full cursor-text items-center overflow-hidden px-[2px] py-[5px] text-[16px] text-text outline-none"
       >
-        {valor ? <Formula tex={valor} /> : <span className="text-[14px] text-text-3">escreva, por exemplo, z = x² − y²</span>}
+        {valor ? <Formula tex={valor} /> : <span className="text-[14px] text-text-3">escreva, por exemplo, {exemplo[1]}</span>}
       </div>
     )
   }

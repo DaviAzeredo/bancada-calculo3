@@ -125,7 +125,8 @@ export class GeoDinamica {
   atualiza(m: MalhaSup, raio: number) {
     const nV = m.pos.length / 3
     const nI = m.idx.length
-    if (nV > this.capV || nI > this.capI) {
+    // malha vazia na primeira vez (função fora da vista, domínio vazio): os buffers nascem assim mesmo
+    if (nV > this.capV || nI > this.capI || !this.geo.attributes.position) {
       this.geo.dispose()
       this.geo = new BufferGeometry()
       this.capV = Math.ceil(nV * 1.2) + 16
