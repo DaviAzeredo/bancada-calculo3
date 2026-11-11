@@ -68,6 +68,14 @@ function naVez(f: () => void) {
   folga(passo)
 }
 
+/**
+ * Tela de toque: o editor do MathLive se foca ao primeiro contato, e arrastar a lista por cima de
+ * uma expressão abria o teclado, que redimensiona a página e a cena. No toque, a expressão fica em
+ * KaTeX e só vira editor num toque de verdade (click), voltando a KaTeX quando perde o foco. O
+ * MathLive nem carrega antes da primeira edição.
+ */
+const TOQUE = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
+
 /** O cursor está num subscrito? Dentro de um ramo, getValue só devolve o texto desse ramo. */
 function noSubscrito(mf: MathfieldElement) {
   if ((mf.getElementInfo(mf.position)?.depth ?? 0) < 1) return false
@@ -93,27 +101,32 @@ export function CampoMat({ valor, rotulo, foco, aoMudar, aoEnter, aoApagarVazia,
   const ref = useRef<MathfieldElement>(null)
   // clicou na fórmula antes da vez dela: vira editor na hora e recebe o foco
   const querFoco = useRef(!!foco)
+  const vivo = useRef(true)
   const cb = useRef({ aoMudar, aoEnter, aoApagarVazia, aoSubir, aoDescer, aoFocar })
   cb.current = { aoMudar, aoEnter, aoApagarVazia, aoSubir, aoDescer, aoFocar }
 
   useEffect(() => {
-    let vivo = true
-    carregaMathlive().then(
-      () => {
-        if (!vivo) return
-        if (querFoco.current) setPronto(true)
-        else naVez(() => vivo && flushSync(() => setPronto(true)))
-      },
-      () => undefined,
-    )
+    vivo.current = true
+    // no toque, o editor só nasce quando pedido: toque na fórmula ou linha nova
+    if (!TOQUE || querFoco.current) {
+      carregaMathlive().then(
+        () => {
+          if (!vivo.current) return
+          if (querFoco.current) setPronto(true)
+          else naVez(() => vivo.current && flushSync(() => setPronto(true)))
+        },
+        () => undefined,
+      )
+    }
     return () => {
-      vivo = false
+      vivo.current = false
     }
   }, [])
 
   const acorda = () => {
     querFoco.current = true
     if (jaCarregou) setPronto(true)
+    else carregaMathlive().then(() => vivo.current && setPronto(true), () => undefined)
   }
 
   useEffect(() => {
@@ -144,13 +157,25 @@ export function CampoMat({ valor, rotulo, foco, aoMudar, aoEnter, aoApagarVazia,
       else if (e.key === 'ArrowDown') cb.current.aoDescer?.()
     }
     const aoFocus = () => cb.current.aoFocar?.()
+    // no toque, sem foco o editor volta a ser fórmula: arrastar por cima dele não reabre o teclado
+    let espera: ReturnType<typeof setTimeout> | undefined
+    const aoBlur = () => {
+      if (!TOQUE) return
+      clearTimeout(espera)
+      espera = setTimeout(() => {
+        if (vivo.current && !mf.hasFocus()) setPronto(false)
+      }, 250)
+    }
     mf.addEventListener('input', aoInput)
     mf.addEventListener('keydown', aoTecla, { capture: true })
     mf.addEventListener('focus', aoFocus)
+    mf.addEventListener('blur', aoBlur)
     return () => {
+      clearTimeout(espera)
       mf.removeEventListener('input', aoInput)
       mf.removeEventListener('keydown', aoTecla, { capture: true })
       mf.removeEventListener('focus', aoFocus)
+      mf.removeEventListener('blur', aoBlur)
     }
   }, [pronto]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -174,8 +199,15 @@ export function CampoMat({ valor, rotulo, foco, aoMudar, aoEnter, aoApagarVazia,
         role="textbox"
         tabIndex={0}
         aria-label={rotulo}
-        onFocus={acorda}
-        onPointerDown={acorda}
+        // click, e não pointerdown: o começo de uma rolagem não é toque na expressão
+        onClick={acorda}
+        onFocus={TOQUE ? undefined : acorda}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            acorda()
+          }
+        }}
         className="flex min-h-[34px] w-full cursor-text items-center overflow-hidden px-[2px] py-[5px] text-[16px] text-text outline-none"
       >
         {valor ? <Formula tex={valor} /> : <span className="text-[14px] text-text-3">escreva, por exemplo, z = x² − y²</span>}

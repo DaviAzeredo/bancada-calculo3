@@ -88,11 +88,18 @@ Esse envio desnecessário, e não o shader, era o que travava a thread principal
 ## Ritmo da tela (`Ritmo` em `cena/Viewport.tsx`)
 
 Meta: um quadro por atualização da tela, 120 quadros/s numa tela de 120 Hz. O ritmo da tela sai
-dos quadros mais rápidos, que o vsync prende a ele. Em movimento, duas perdas (quadro acima de
+dos quadros mais rápidos, que o vsync prende a ele. Em movimento, quatro perdas (quadro acima de
 1,5 intervalo) em 20 quadros baixam a densidade 18%, até 0,5; um segundo e meio sem perda sobe
 10%, sem voltar ao nível que falhou nos 8 s anteriores. Quadro acima de 4 intervalos é pico de
 compilação ou envio, e só conta quando se repete. Parada por 500 ms, a cena desenha um quadro na
 densidade inteira; o celular começa em 1,5.
+
+Travas contra a espiral para baixo, achadas com gestos de toque reais no perfil de celular: só
+conta o intervalo até um quadro que o anterior pediu (`internal.frames > 0` no fim do quadro);
+quadros soltos de malha chegando ou teclado abrindo não são perda. Depois de cada troca, 12
+quadros não contam, porque realocar o canvas deixa o seguinte lento. Quadro em que a CPU usou 60%
+do intervalo não conta. E se baixar não cortou 10% do tempo médio do quadro, a densidade volta e o controle
+espera de 10 a 60 s antes de tentar de novo. No celular não há troca de densidade ao parar.
 
 A densidade vai como prop do Canvas, pelo `useHud`: a R3F reaplica a prop `dpr` a cada render do
 Canvas, e um `setDpr` direto era desfeito no clique seguinte da barra.
@@ -110,7 +117,10 @@ Cada corte foi medido antes de entrar:
   31 a 44 chamadas por quadro para 5 a 12. No celular, cada chamada é CPU por quadro.
 - `Aquecimento` compila um programa de cada peça na abertura, em paralelo, na camada 31.
 - `checkShaderErrors` só em desenvolvimento: a conferência esperava a placa ligar o programa.
-- Editores MathLive criados um por vez, nas folgas entre quadros; até lá, a fórmula em KaTeX.
+- Editores MathLive criados um por vez, nas folgas entre quadros; até lá, a fórmula em KaTeX. Na
+  tela de toque, a expressão só vira editor num toque de verdade (`click`, não `pointerdown`) e
+  volta a KaTeX ao perder o foco: rolar a lista por cima de um editor o focava e abria o teclado,
+  que redimensiona a página e a cena. O MathLive nem carrega antes da primeira edição.
 
 Medir: `?fps` mostra a taxa; `?fps=sync` lê um pixel por quadro e soma CPU e placa, o que infla o
 tempo; `?alvo=120` fixa o ritmo sem vsync; `?ritmo=0` desliga o controle; `?aa=0` tira o

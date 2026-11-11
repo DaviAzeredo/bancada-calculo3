@@ -86,12 +86,14 @@ parada desenha um quadro nítido. O resto do orçamento vem de cortes medidos: s
 antisserrilhado só em tela de densidade baixa, grade de 128, rótulos e eixos em poucas chamadas,
 programas compilados de antemão e editores criados um por vez.
 
-Medido numa Intel UHD integrada, na bateria, a 1920×1080 com densidade 1,25, câmera girando e
-tempo da placa por consulta de tempo: 37 das 38 cenas da galeria com todo quadro abaixo de 8,3 ms
-na resolução cheia. A exceção é a Curva de Viviani, com uma esfera transparente que enche a tela;
-com o ajuste de densidade ligado, ela e o caso extremo de dezesseis superfícies transparentes
-também ficam abaixo de 8,3 ms. No navegador de verdade, a 60 Hz: nenhum quadro perdido girando a
-cena, e de 0 a 2 ao abrir um exemplo.
+Medido numa Intel UHD integrada, na tomada, a 1920×1080 com densidade 1,25, câmera girando e
+tempo da placa por consulta de tempo: as 38 cenas da galeria com todo quadro abaixo de 8,3 ms na
+resolução cheia, e o pior quadro de todas em 4,8 ms; na bateria, 37 de 38. Dezesseis superfícies
+transparentes juntas pedem o ajuste de densidade, e com ele também ficam abaixo de 8,3 ms. No
+perfil de celular (tela de 412×915, toque, CPU 4 vezes mais lenta): na mediana, de 1 a 3,5 ms de
+CPU e menos de 1 ms de placa por quadro.
+
+No celular, a expressão fica em KaTeX e só vira editor num toque: rolar a lista não abre o teclado.
 
 Acrescente `?fps` ao endereço (antes do `#`) para ver quadros por segundo, triângulos e a placa.
 `?fps=sync` lê um pixel a cada quadro e soma o tempo da placa; serve para comparar versões, mas

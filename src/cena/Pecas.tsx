@@ -1,6 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { BufferAttribute, BufferGeometry, CanvasTexture, Color, Group, InstancedMesh, Matrix4, Mesh, MeshLambertMaterial, NormalBlending, type Plane, Points, Quaternion, ShaderMaterial, Sprite, SpriteMaterial, Vector3 } from 'three'
+import { BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, Color, CylinderGeometry, Group, InstancedMesh, Matrix4, Mesh, MeshLambertMaterial, NormalBlending, type Plane, Points, Quaternion, ShaderMaterial, Sprite, SpriteMaterial, Vector3 } from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
@@ -173,17 +174,22 @@ function Pa({ p, v, cor, escala }: { p: [number, number, number]; v: [number, nu
       st.invalidate()
     }
   })
+  // quatro pás e o eixo numa malha só: era uma chamada de desenho por peça, por quadro, girando
+  const geo = useMemo(() => {
+    const partes: BufferGeometry[] = [0, 1, 2, 3].map((i) => {
+      const a = (i * Math.PI) / 2
+      return new BoxGeometry(1, 1, 1).scale(escala * 2.6, escala * 0.14, escala * 1.6).rotateZ(a).translate(Math.cos(a) * escala * 1.4, Math.sin(a) * escala * 1.4, 0)
+    })
+    partes.push(new CylinderGeometry(1, 1, 1, 10).scale(escala * 0.12, escala * 3.2, escala * 0.12).rotateX(Math.PI / 2))
+    const m = mergeGeometries(partes.map((g) => g.toNonIndexed()))
+    for (const g of partes) g.dispose()
+    return m
+  }, [escala])
+  useEffect(() => () => geo.dispose(), [geo])
   return (
     <group ref={ref} position={p} quaternion={q}>
       <group ref={giro}>
-        {[0, 1, 2, 3].map((i) => (
-          <mesh key={i} rotation={[0, 0, (i * Math.PI) / 2]} position={[Math.cos((i * Math.PI) / 2) * escala * 1.4, Math.sin((i * Math.PI) / 2) * escala * 1.4, 0]} scale={[escala * 2.6, escala * 0.14, escala * 1.6]}>
-            <boxGeometry args={[1, 1, 1]} />
-            <meshLambertMaterial color={cor} />
-          </mesh>
-        ))}
-        <mesh rotation={[Math.PI / 2, 0, 0]} scale={[escala * 0.12, escala * 3.2, escala * 0.12]}>
-          <cylinderGeometry args={[1, 1, 1, 10]} />
+        <mesh geometry={geo}>
           <meshLambertMaterial color={cor} />
         </mesh>
       </group>
@@ -237,11 +243,14 @@ void main() {
 }`
 
 const CAUDA = 5
+// esmaecimento da cauda, calculado uma vez: eram cinco potências por partícula por quadro
+const DESBOTA = Array.from({ length: CAUDA }, (_, k) => (1 - k / CAUDA) ** 1.6)
 const TOQUE = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
 
 /** Partículas no próprio campo: o programa em lote dá conta de milhares por quadro. */
 function Particulas({ F, dim, linha, vista, tema }: { F: Expr[]; dim: 2 | 3; linha: Linha; vista: Vista; tema: TemaCena }) {
-  const N = Math.round((dim === 2 ? 900 : 1500) * (TOQUE ? 0.6 : 1))
+  // no celular a integração das partículas é a maior conta de CPU por quadro
+  const N = Math.round((dim === 2 ? 900 : 1500) * (TOQUE ? 0.45 : 1))
   const total = N * CAUDA
   const nums = useBancada((s) => s.resolvido.numeros)
   const prog = useMemo(() => compila(F, ['x', 'y', 'z', ...Object.keys(nums)]), [F, nums])
@@ -313,7 +322,8 @@ function Particulas({ F, dim, linha, vista, tema }: { F: Expr[]; dim: 2 | 3; lin
       pos[3 * b + 1] = s.y[i]
       pos[3 * b + 2] = s.z[i]
       const vida = Math.min(1, s.v[i] * 2.2, (4 - s.v[i]) * 2.2)
-      for (let k = 0; k < CAUDA; k++) fade[b + k] = Math.max(0, vida) * (1 - k / CAUDA) ** 1.6
+      const v0 = Math.max(0, vida)
+      for (let k = 0; k < CAUDA; k++) fade[b + k] = v0 * DESBOTA[k]
     }
     geo.attributes.position.needsUpdate = true
     geo.attributes.aFade.needsUpdate = true
